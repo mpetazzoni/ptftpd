@@ -1,0 +1,24 @@
+pTFTPd - A Python TFTP server
+
+pTFTPd is a simple TFTP daemon written in Python. It fully supports
+the TFTP specification as defined in RFC1350. It also supports the TFTP
+Option Extension protocol (per RFC2347), although the specific options
+themselves are not yet supported (RFC2348 and RFC2349).
+
+Usage:
+
+For help on how to use pTFTPd, type:
+
+	./ptftpd.py --help
+
+By default, pTFTPd will listen on port 6969 and serve /tftpboot. Use
+the -p and -b options to change this :
+
+	./ptftpd.py -p 69 -b /var/lib/tftp/
+
+
+Credits:
+
+pTFTPd is written by Maxime Petazzoni <maxime.petazzoni@bulix.org>. This
+software is released under the terms of the GNU General Public Licence
+version 2. See COPYING for details.
