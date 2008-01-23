@@ -19,6 +19,6 @@ the -p and -b options to change this :
 
 Credits:
 
-pTFTPd is written by Maxime Petazzoni <maxime.petazzoni@bulix.org>. This
-software is released under the terms of the GNU General Public Licence
-version 2. See COPYING for details.
+pTFTPd is written by Maxime Petazzoni <maxime.petazzoni@bulix.org>
+and is released under the terms of the GNU General Public License. See
+COPYING for details.
