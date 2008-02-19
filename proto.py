@@ -18,6 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
+import re
 import struct
 
 # The following values are defined in the following RFC documents:
@@ -74,13 +75,19 @@ TFTP_ERRORS = {
 
 # TFTP transfer modes (mail is deprecated as of RFC1350)
 TFTP_MODES = ['netascii', 'octet']
+NETASCII_TO_OCTET = re.compile('\r\n')
+OCTET_TO_NETASCII = re.compile('\r?\n')
 
 # TFTP option names, as defined in RFC2348 and RFC2349
 TFTP_OPTION_BLKSIZE = 'blksize'
 TFTP_OPTION_TIMEOUT = 'timeout'
 TFTP_OPTION_TSIZE = 'tsize'
 
-import struct
+# UDP datagram size
+UDP_TRANSFER_SIZE = 8192
+
+# Command verbosity
+_verbose = 1
 
 class TFTPHelper:
     """
@@ -99,8 +106,9 @@ class TFTPHelper:
           The request packet as a string.
         """
 
-        print (">   %s: %s (mode: %s, opts: %s)" %
-               (TFTP_OPS[OP_RRQ], filename, mode, opts))
+        if _verbose > 0:
+            print ("  >   %s: %s (mode: %s, opts: %s)" %
+                   (TFTP_OPS[OP_RRQ], filename, mode, opts))
 
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
                              OP_RRQ, filename, '\0', mode, '\0')
@@ -123,8 +131,9 @@ class TFTPHelper:
           The request packet as a string.
         """
 
-        print (">   %s: %s (mode: %s)" %
-               (TFTP_OPS[OP_WRQ], filename, mode, opts))
+        if _verbose > 0:
+            print ("  >   %s: %s (mode: %s)" %
+                   (TFTP_OPS[OP_WRQ], filename, mode, opts))
 
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
                              OP_RRQ, filename, '\0', mode, '\0')
@@ -140,27 +149,34 @@ class TFTPHelper:
         Creates a packed TFTP ACK packet.
 
         Args:
-          num: the data packet number to ack (int).
+          num (integer): the data packet number to ack.
         Returns:
           The ack packet as a string.
         """
 
-        print "> %s: %d" % (TFTP_OPS[OP_ACK], num)
+        if _verbose > 1:
+            print "  >   %s: %d" % (TFTP_OPS[OP_ACK], num)
         return struct.pack('!HH', OP_ACK, num)
 
-    def createERROR(errno):
+    def createERROR(errno, errmsg=None):
         """
         Creates a packed TFTP error packet.
 
         Args:
-          errno: the TFTP error code (int).
+          errno (integer): the TFTP error code.
+          errmsg (string): when using error code ERROR_UNDEF, a specific
+            error message can be attached to the error packet via this
+            parameter.
         Returns:
           The error packet as a string.
         """
 
         error = TFTP_ERRORS[errno]
+        if errno == ERROR_UNDEF and errmsg:
+            error = errmsg
 
-        print "> %s: %d %s" % (TFTP_OPS[OP_ERROR], errno, error)
+        if _verbose > 0:
+            print "  > %s: %d %s" % (TFTP_OPS[OP_ERROR], errno, error)
         return struct.pack('!HH%dsc' % len(error),
                            OP_ERROR, errno, error, '\0')
 
@@ -175,7 +191,8 @@ class TFTPHelper:
           The data packet as a string.
         """
 
-        print ">  %s: %d (len: %d)" % (TFTP_OPS[OP_DATA], num, len(data))
+        if _verbose > 1:
+            print "  >  %s: %d (len: %d)" % (TFTP_OPS[OP_DATA], num, len(data))
         return struct.pack('!HH%ds' % len(data), OP_DATA, num, data)
 
 
@@ -208,8 +225,9 @@ class TFTPHelper:
         try:
             TFTP_MODES.index(mode)
             if filename != '':
-                print ("<   %s: %s (mode: %s, opts: %s)" %
-                       (TFTP_OPS[OP_RRQ], filename, mode, opts))
+                if _verbose > 0:
+                    print ("  <   %s: %s (mode: %s, opts: %s)" %
+                           (TFTP_OPS[OP_RRQ], filename, mode, opts))
                 return filename, mode, opts
         except ValueError:
             raise SyntaxError()
@@ -243,8 +261,9 @@ class TFTPHelper:
         try:
             TFTP_MODES.index(mode)
             if filename != '':
-                print ("<   %s: %s (mode: %s, opts: %s)" %
-                       (TFTP_OPS[OP_WRQ], filename, mode, opts))
+                if _verbose > 0:
+                    print ("  <   %s: %s (mode: %s, opts: %s)" %
+                           (TFTP_OPS[OP_WRQ], filename, mode, opts))
                 return filename, mode, opts
         except ValueError:
             raise SyntaxError()
@@ -265,7 +284,8 @@ class TFTPHelper:
             packet = struct.unpack('!H', request)
             num = packet[0]
 
-            print "<   %s: %d" % (TFTP_OPS[OP_ACK], num),
+            if _verbose > 1:
+                print "  <   %s: %d" % (TFTP_OPS[OP_ACK], num),
             return num
         except struct.error:
             raise SyntaxError()
@@ -288,7 +308,8 @@ class TFTPHelper:
             num = packet[0]
             data = request[2:]
 
-            print "<  %s: %d, %d bytes" % (TFTP_OPS[OP_DATA], num, len(data))
+            if _verbose > 1:
+                print "  <  %s: %d, %d bytes" % (TFTP_OPS[OP_DATA], num, len(data))
             return num, data
         except struct.error:
             raise SyntaxError()
@@ -311,7 +332,8 @@ class TFTPHelper:
             errno = packet[0]
             errmsg = request[2:].split('\0')[0]
 
-            print "<  %s: %d %s" % (TFTP_OPS[OP_DATA], errno, errmsg)
+            if _verbose > 0:
+                print "  < %s: %s" % (TFTP_OPS[OP_ERROR], errmsg)
             return errno, errmsg
         except (struct.error, IndexError):
             raise SyntaxError()

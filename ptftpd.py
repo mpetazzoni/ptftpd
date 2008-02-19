@@ -26,6 +26,8 @@ TFTP Option Extension protocol (per RFC2347), although the specific
 options themselves are not yet supported (RFC2348 and RFC2349).
 """
 
+from datetime import datetime
+from datetime import timedelta
 import errno
 import getopt
 import os
@@ -33,13 +35,15 @@ import stat
 import struct
 import sys
 import SocketServer
+import threading
+import time
 
 from proto import *
 from state import *
 
-_PTFTPD_SERVER_NAME = "pFTPd"
+_PTFTPD_SERVER_NAME = 'pFTPd'
 _PTFTPD_DEFAULT_PORT = 6969
-_PTFTPD_DEFAULT_PATH = "/tftpboot"
+_PTFTPD_DEFAULT_PATH = '/tftpboot'
 
 _port = _PTFTPD_DEFAULT_PORT
 _path = _PTFTPD_DEFAULT_PATH
@@ -63,12 +67,17 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             opn = struct.unpack('!h', request[:2])[0]
             op = TFTP_OPS[opn]
             response = getattr(self, "serve%s" % op)(opn, request[2:])
-        except (KeyError, AttributeError):
-            print "Unknown or unsupported operation %d!" % opn
+        except KeyError:
+            print "Unknown operation %d!" % opn
             response = TFTPHelper.createERROR(ERROR_ILLEGAL_OP)
+        except AttributeError:
+            print "Unsupported operation %s!" % op
+            response = TFTPHelper.createERROR(ERROR_UNDEF,
+                                              'Operation not supported by server.')
 
         if response:
             self.wfile.write(response)
+            self.wfile.flush()
 
     def serveRRQ(self, op, request):
         """
@@ -99,7 +108,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
             if e.errno == errno.ENOENT:
                 peer_state.error = ERROR_FILE_NOT_FOUND
-            elif e.errno == errno.EACCESS or e.errno == errno.EPERM:
+            elif e.errno == errno.EACCES or e.errno == errno.EPERM:
                 peer_state.error = ERROR_ACCESS_VIOLATION
             else:
                 peer_state.error = ERROR_UNDEF
@@ -153,6 +162,17 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         return peer_state.next()
 
     def serveACK(self, op, request):
+        """
+		Serves ACK packets.
+
+        Args:
+          op: the TFTP opcode (int).
+          request: the TFTP packet without its opcode (string).
+        Returns:
+          A response packet (as a string) or None if the request is
+          ignored for some reason.
+        """
+
         try:
             num = TFTPHelper.parseACK(request)
         except SyntaxError:
@@ -170,25 +190,34 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return peer_state.next()
 
         if peer_state.state == 'send':
-            if peer_state.packetnum == num:
-                print "Sent packet #%d acked, continuing transfer." % num
-            else:
-                print "Got ACK with incoherent data packet number. Aborting transfer."
+            if peer_state.packetnum != num:
+                print 'Got ACK with incoherent data packet number. Aborting transfer.'
                 peer_state.state = 'error'
                 peer_state.error = ERROR_ILLEGAL_OP
+
             return peer_state.next()
         elif peer_state.state == 'error':
-            print "Error ACKed. Terminating transfer."
+            print 'Error ACKed. Terminating transfer.'
         elif peer_state.state == 'last':
-            print "Last packet acked, closing file."
             peer_state.file.close()
         else:
-            print "ERROR: Unexpected ACK!"
+            print 'ERROR: Unexpected ACK!'
 
         PTFTPD_STATE.pop(self.client_address)
         return None
 
     def serveDATA(self, op, request):
+        """
+        Serves DATA packets.
+
+        Args:
+          op: the TFTP opcode (int).
+          request: the TFTP packet without its opcode (string).
+        Returns:
+          A response packet (as a string) or None if the request is
+          ignored for some reason.
+        """
+
         try:
             num, data = TFTPHelper.parseDATA(request)
         except SyntaxError:
@@ -214,6 +243,17 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         return peer_state.next()
 
     def serveERROR(self, op, request):
+        """
+        Serves ERROR packets.
+
+        Args:
+          op: the TFTP opcode (int).
+          request: the TFTP packet without its opcode (string).
+        Returns:
+          A response packet (as a string) or None if the request is
+          ignored for some reason.
+        """
+
         try:
             errno, errmsg = TFTPHelper.parseERROR(request)
         except SyntaxError:
@@ -225,6 +265,34 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             PTFTPD_STATE.pop(self.client_address)
 
         return None
+
+
+class TFTPServerTimeouter(threading.Thread):
+    """
+    A timeouter thread to cleanup the server's state of timeouted
+    clients.
+    """
+
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.setDaemon(True)
+        self.start()
+
+    def run(self):
+        while True:
+            toremove = []
+
+            for peer, state in PTFTPD_STATE.iteritems():
+                delta = datetime.today() - state.last_seen
+                if delta > timedelta(seconds=30):
+                    toremove.append(peer)
+
+            for peer in toremove:
+                del PTFTPD_STATE[peer]
+
+            # Go to sleep
+            time.sleep(10)
+
 
 def checkBasePath(path):
     try:
@@ -247,7 +315,8 @@ def usage():
 
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'hp:b:', ['help', 'port=', 'basepath='])
+        opts, args = getopt.getopt(sys.argv[1:], 'hp:b:',
+                                   ['help', 'port=', 'basepath='])
     except getopt.GetoptError:
         # Print usage and exit
         usage()
@@ -266,12 +335,15 @@ if __name__ == '__main__':
         if opt in ('-b', '--basepath'):
             _path = val
 
-    server = SocketServer.UDPServer(('', _port), TFTPServerHandler)
-
     if checkBasePath(_path):
         try:
+            server = SocketServer.UDPServer(('', _port), TFTPServerHandler)
+            timeouter = TFTPServerTimeouter()
+
             print ("%s serving %s on port %d..." %
                    (_PTFTPD_SERVER_NAME, _path, _port))
+
             server.serve_forever()
         except KeyboardInterrupt:
             print 'Got ^C. Exiting'
+            sys.exit(0)

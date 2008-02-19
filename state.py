@@ -18,6 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
+from datetime import datetime
 import re
 
 from proto import *
@@ -55,8 +56,6 @@ class TFTPState:
 
         self.file = None               # File object to read from or write to
         self.packetnum = None          # Current data packet number
-        self.data = None               # Data to be sent or stored
-
         self.state = None              # Current transaction state (send/recv/last/error)
         self.error = None              # TFTP error code (if state == error)
 
@@ -65,6 +64,10 @@ class TFTPState:
         if self.opts.has_key(TFTP_OPTION_BLKSIZE):
             self.packetsize = self.opts[TFTP_OPTION_BLKSIZE]
 
+        self.last_seen = datetime.today()
+
+        self.data = ""
+        self.tosend = ""
 
     def __str__(self):
         s = "TFTPState/%s for %s\n" % (TFTP_OPS[self.op], self.peer)
@@ -89,16 +92,25 @@ class TFTPState:
           or None if no action is required.
         """
 
+        # Update the last seen bit
+        self.last_seen = datetime.today()
+
         if self.state == 'send':
-            self.data = self.file.read(self.packetsize)
+            fromfile = self.file.read(self.packetsize - len(self.tosend))
 
             # Convert LF to CRLF if needed
             if self.mode == 'netascii':
-                self.data = re.sub('\r?\n', '\r\n', self.data)
+                fromfile = OCTET_TO_NETASCII.sub('\r\n', fromfile)
+
+            self.data = self.tosend + fromfile
+            self.tosend = ""
 
             self.packetnum += 1
 
-            if len(self.data) < 512:
+            if len(self.data) > 512:
+                self.tosend = self.data[512:]
+                self.data = self.data[:512]
+            elif len(self.data) < 512:
                 self.state = 'last'
 
             return TFTPHelper.createDATA(self.packetnum, self.data)
