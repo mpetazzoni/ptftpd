@@ -22,8 +22,12 @@
 
 pTFTPd is a simple TFTP daemon written in Python. It fully supports
 the TFTP specification as defined in RFC1350. It also supports the
-TFTP Option Extension protocol (per RFC2347), although the specific
-options themselves are not yet supported (RFC2348 and RFC2349).
+TFTP Option Extension protocol (per RFC2347), the block size option as
+defined in RFC2348 and the timeout interval and transfer size options
+from RFC2349.
+
+Note that this program currently does *not* have any retry/re-transmit
+capabilities and thus may not accomodate very low quality networks.
 """
 
 from datetime import datetime
@@ -94,8 +98,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         Serves RRQ packets (GET requests).
 
         Args:
-          op: the TFTP opcode (int).
-          request: the TFTP packet without its opcode (string).
+          op (integer): the TFTP opcode.
+          request (string): the TFTP packet without its opcode.
         Returns:
           A response packet (as a string) or None if the request is
           ignored for some reason.
@@ -107,17 +111,16 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malformed RRQ requests
             return None
 
-        peer_state = state.TFTPState(self.client_address, op, filename, mode)
+        path = os.path.join(_path, filename)
+        peer_state = state.TFTPState(self.client_address, op, path, mode)
 
         # Only set options if not running in RFC1350 compliance mode
         if not _rfc1350:
-            peer_state.parse_options(opts)
+            peer_state.parse_options(self.__filter_options(opts))
 
         try:
-            filepath = os.path.join(_path, filename)
-
-            peer_state.file = open(filepath)
-            peer_state.filesize = os.stat(filepath)[stat.ST_SIZE]
+            peer_state.file = open(path)
+            peer_state.filesize = os.stat(path)[stat.ST_SIZE]
             peer_state.packetnum = 0
 
             # In RFC1350 compliance mode, start sending data
@@ -146,8 +149,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         Serves WRQ packets (PUT requests).
 
         Args:
-          op: the TFTP opcode (int).
-          request: the TFTP packet without its opcode (string).
+          op (integer): the TFTP opcode.
+          request (string): the TFTP packet without its opcode.
         Returns:
           A response packet (as a string) or None if the request is
           ignored for some reason.
@@ -159,13 +162,13 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malfored WRQ requests
             return None
 
-        peer_state = state.TFTPState(self.client_address, op, filename, mode)
+        path = os.path.join(_path, filename)
+        peer_state = state.TFTPState(self.client_address, op, path, mode)
 
         # Only set options if not running in RFC1350 compliance mode
         if not _rfc1350:
-            peer_state.parse_options(opts)
+            peer_state.parse_options(self.__filter_options(opts))
 
-        path = os.path.join(_path, filename)
         try:
             # Try to open the file. If it succeeds, it means the file
             # already exists and report the error
@@ -178,15 +181,16 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             if e.errno == errno.ENOENT:
                 try:
                     peer_state.file = open(path, 'w')
-                    peer_state.packetnum = 0
 
                     # In RFC1350 compliance mode, start receiving data
                     # immediately. Otherwise, send an OACK to the
                     # client.
                     if _rfc1350:
+                        peer_state.packetnum = 0
                         peer_state.state = state.STATE_RECV
                     else:
-                        peer_state.state = state.STATE_OACK
+                        peer_state.packetnum = 1
+                        peer_state.state = state.STATE_SEND_OACK
                 except IOError:
                     peer_state.state = state.STATE_ERROR
                     peer_state.error = proto.ERROR_ACCESS_VIOLATION
@@ -202,8 +206,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 		Serves ACK packets.
 
         Args:
-          op: the TFTP opcode (int).
-          request: the TFTP packet without its opcode (string).
+          op (integer): the TFTP opcode.
+          request (string): the TFTP packet without its opcode.
         Returns:
           A response packet (as a string) or None if the request is
           ignored or completed.
@@ -218,7 +222,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         try:
             peer_state = PTFTPD_STATE[self.client_address]
         except KeyError:
-            return proto.TFTPHelper.createERROR(ERROR_UNKNOWN_ID)
+            return proto.TFTPHelper.createERROR(proto.ERROR_UNKNOWN_ID)
 
         if peer_state.state == state.STATE_SEND_OACK:
             if num != 0:
@@ -238,6 +242,9 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
             return peer_state.next()
 
+        elif peer_state.state == state.STATE_RECV and num == 0:
+            return peer_state.next()
+
         elif peer_state.state == state.STATE_ERROR:
             print 'Error ACKed. Terminating transfer.'
             return None
@@ -245,11 +252,13 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         elif peer_state.state == state.STATE_SEND_LAST:
             print "  >  DATA: %d data packet(s) sent." % peer_state.packetnum
             print "  <   ACK: Transfer complete, %d byte(s)." % peer_state.filesize
-            peer_state.file.close()
+            del PTFTPD_STATE[self.client_address]
             return None
 
         print 'ERROR: Unexpected ACK!'
-        PTFTPD_STATE.pop(self.client_address)
+
+        peer_state.purge()
+        del PTFTPD_STATE[self.client_address]
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
     def serveDATA(self, op, request):
@@ -257,8 +266,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         Serves DATA packets.
 
         Args:
-          op: the TFTP opcode (int).
-          request: the TFTP packet without its opcode (string).
+          op (integer): the TFTP opcode.
+          request (string): the TFTP packet without its opcode.
         Returns:
           A response packet (as a string) or None if the request is
           ignored for some reason.
@@ -275,6 +284,9 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         except KeyError:
             return proto.TFTPHelper.createERROR(proto.ERROR_UNKNOWN_ID)
 
+        if len(data) > peer_state.opts[proto.TFTP_OPTION_BLKSIZE]:
+            return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
+
         if peer_state.state == state.STATE_RECV:
             if num != peer_state.packetnum:
                 peer_state.state = state.STATE_ERROR
@@ -282,16 +294,19 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             else:
                 peer_state.data = data
 
-            return peer_state.next()
+            next = peer_state.next()
 
-        elif peer_state.state == state.STATE_RECV_LAST:
-            print "  <  DATA: %d packet(s) recevied." % peer_state.packetnum
-            print "  >   ACK: Transfer complete, %d byte(s)." % peer_state.filesize
-            peer_state.file.close()
-            return None
+            if peer_state.done:
+                print "  <  DATA: %d packet(s) recevied." % peer_state.packetnum
+                print "  >   ACK: Transfer complete, %d byte(s)." % peer_state.filesize
+                del PTFTPD_STATE[self.client_address]
+
+            return next
 
         print 'ERROR: Unexpected DATA!'
-        PTFTPD_STATE.pop(self.client_address)
+
+        peer_state.purge()
+        del PTFTPD_STATE[self.client_address]
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
     def serveERROR(self, op, request):
@@ -299,8 +314,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         Serves ERROR packets.
 
         Args:
-          op: the TFTP opcode (int).
-          request: the TFTP packet without its opcode (string).
+          op (integer): the TFTP opcode.
+          request (string): the TFTP packet without its opcode.
         Returns:
           A response packet (as a string) or None if the request is
           ignored for some reason.
@@ -314,10 +329,14 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         # An error packet immediately terminates a connection
         if PTFTPD_STATE.has_key(self.client_address):
-            PTFTPD_STATE.pop(self.client_address)
+            peer_state = PTFTPD_STATE[self.client_address]
+            peer_state.purge()
+            del PTFTPD_STATE[self.client_address]
 
         return None
 
+    def __filter_options(self, opts):
+        return opts
 
 class TFTPServerTimeouter(threading.Thread):
     """
@@ -334,18 +353,14 @@ class TFTPServerTimeouter(threading.Thread):
         while True:
             toremove = []
 
-            for peer, state in PTFTPD_STATE.iteritems():
-                delta = datetime.today() - state.last_seen
-                if delta > timedelta(seconds=30):
+            for peer, peer_state in PTFTPD_STATE.iteritems():
+                delta = datetime.today() - peer_state.last_seen
+                if delta > timedelta(seconds=state.STATE_TIMEOUT_SECS):
+                    print "  #  T-OUT: peer %s:%d timeouted." % peer
                     toremove.append(peer)
 
             for peer in toremove:
-                if PTFTPD_STATE[peer].file:
-                    try:
-                        PTFTPD_STATE[peer].file.close()
-                    except AttributeError:
-                        pass
-
+                PTFTPD_STATE[peer].purge()
                 del PTFTPD_STATE[peer]
 
             # Go to sleep

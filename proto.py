@@ -134,15 +134,15 @@ class TFTPHelper:
         """
 
         if _verbose > 0:
-            print ("  >   %s: %s (mode: %s)" %
+            print ("  >   %s: %s (mode: %s, opts: %s)" %
                    (TFTP_OPS[OP_WRQ], filename, mode, opts))
 
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
-                             OP_RRQ, filename, '\0', mode, '\0')
+                             OP_WRQ, filename, '\0', mode, '\0')
 
         for opt, val in opts.iteritems():
             packet += struct.pack('!%dsc%dsc' % (len(opt), len(str(val))),
-                                  opt, '\0', val, '\0')
+                                  opt, '\0', str(val), '\0')
 
         return packet
 
@@ -159,7 +159,7 @@ class TFTPHelper:
         if _verbose > 1 and num > 0:
             print "  >   %s: #%d" % (TFTP_OPS[OP_ACK], num)
         elif _verbose > 0 and num == 0:
-            print "  >   %s: Acknowledging options." % TFTP_OPS[OP_ACK]
+            print "  >   %s: Acknowledging transfer." % TFTP_OPS[OP_ACK]
 
         return struct.pack('!HH', OP_ACK, num)
 
@@ -314,7 +314,7 @@ class TFTPHelper:
             if _verbose > 1 and num > 0:
                 print "  <   %s: #%d" % (TFTP_OPS[OP_ACK], num)
             elif _verbose > 0 and num == 0:
-                    print "  <   %s: Options acknowledged." % TFTP_OPS[OP_ACK]
+                    print "  <   %s: Transfer acknowledged." % TFTP_OPS[OP_ACK]
 
             return num
         except struct.error:

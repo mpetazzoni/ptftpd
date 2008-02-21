@@ -23,15 +23,16 @@ import os
 import re
 import stat
 
-from proto import *
+import proto
 
 STATE_SEND = 1
 STATE_SEND_OACK = 2
 STATE_SEND_LAST = 4
 STATE_RECV = 8
 STATE_RECV_OACK = 16
-STATE_RECV_LAST = 32
-STATE_ERROR = 64
+STATE_ERROR = 32
+
+STATE_TIMEOUT_SECS = 30
 
 class TFTPState:
     """
@@ -41,14 +42,14 @@ class TFTPState:
     with a client.
     """
 
-    def __init__(self, peer, op, filename, mode):
+    def __init__(self, peer, op, filepath, mode):
         """
         Initializes a new TFTP state for the given peer.
 
         Args:
           peer (tuple): a tuple (ip, port) describing the peer.
           op (integer): the operation this state refers to.
-          filename (string): the filename this state refers to.
+          filepath (string): the full path of the used file.
           mode (string): the transfer mode requested.
         Returns:
           A new, initialized TFTPState object with the options parsed.
@@ -56,7 +57,7 @@ class TFTPState:
 
         self.peer = peer
         self.op = op
-        self.filename = filename
+        self.filepath = filepath
         self.mode = mode
 
         self.file = None               # File object to read from or write to
@@ -66,15 +67,35 @@ class TFTPState:
 
         # Option defaults
         self.opts = {
-            TFTP_OPTION_BLKSIZE: TFTP_DEFAULT_PACKET_SIZE,
+            proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE,
             }
 
         self.last_seen = datetime.today()
 
         self.packetnum = None          # Current data packet number
         self.error = None              # TFTP error code to send (if state == error)
-        self.data = ""
+        self.data = None
         self.tosend = ""
+
+    def __del__(self):
+        if not self.file:
+            return
+
+        try:
+            self.file.close()
+        except AttributeError:
+            pass
+
+    def purge(self):
+        """
+        Remove the used file on demand.
+        """
+
+        if self.op == proto.OP_WRQ and self.filepath and self.file:
+            try:
+                os.remove(self.filepath)
+            except OSError:
+                pass
 
     def parse_options(self, opts):
         """
@@ -91,15 +112,16 @@ class TFTPState:
             return
 
         used = []
-        if opts.has_key(TFTP_OPTION_BLKSIZE):
-            self.opts[TFTP_OPTION_BLKSIZE] = int(opts[TFTP_OPTION_BLKSIZE])
-            used.append(TFTP_OPTION_BLKSIZE)
+
+        if opts.has_key(proto.TFTP_OPTION_BLKSIZE):
+            self.opts[proto.TFTP_OPTION_BLKSIZE] = int(opts[proto.TFTP_OPTION_BLKSIZE])
+            used.append(proto.TFTP_OPTION_BLKSIZE)
 
         return used
 
     def __str__(self):
-        s = "TFTPState/%s for %s\n" % (TFTP_OPS[self.op], self.peer)
-        s += "  filename: %s\n" % self.filename
+        s = "TFTPState/%s for %s\n" % (proto.TFTP_OPS[self.op], self.peer)
+        s += "  filepath: %s\n" % self.filepath
         s += "  mode : %s\n" % self.mode
         s += "  state: %s\n" % self.state
         s += "  opts : %s\n" % self.opts
@@ -130,15 +152,19 @@ class TFTPState:
         self.ping()
 
         if self.state == STATE_SEND_OACK:
-            self.state = STATE_SEND
-            return TFTPHelper.createOACK(self.opts)
+            if self.op == proto.OP_RRQ:
+                self.state = STATE_SEND
+            else:
+                self.state = STATE_RECV
+
+            return proto.TFTPHelper.createOACK(self.opts)
 
         elif self.state == STATE_RECV_OACK:
             self.state = STATE_RECV
-            return TFTPHelper.createACK(0)
+            return proto.TFTPHelper.createACK(0)
 
         elif self.state == STATE_SEND:
-            blksize = self.opts[TFTP_OPTION_BLKSIZE]
+            blksize = self.opts[proto.TFTP_OPTION_BLKSIZE]
             fromfile = self.file.read(blksize - len(self.tosend))
 
             # Convert LF to CRLF if needed
@@ -157,11 +183,11 @@ class TFTPState:
                 self.file.close()
                 self.state = STATE_SEND_LAST
 
-            return TFTPHelper.createDATA(self.packetnum, self.data)
+            return proto.TFTPHelper.createDATA(self.packetnum, self.data)
 
         elif self.state == STATE_RECV:
-            if self.data:
-                if len(self.data) < self.opts[TFTP_OPTION_BLKSIZE]:
+            if self.data or self.data == '':
+                if len(self.data) < self.opts[proto.TFTP_OPTION_BLKSIZE]:
                     self.done = True
 
                 # Convert CRLF to LF if needed
@@ -174,15 +200,14 @@ class TFTPState:
                 except IOError, e:
                     self.file.close()
                     if e.errno == errno.ENOSPC:
-                        return TFTPHelper.createERROR(ERROR_DISK_FULL)
+                        return proto.TFTPHelper.createERROR(ERROR_DISK_FULL)
                     else:
-                        return TFTPHelper.createERROR(ERROR_UNDEF)
+                        return proto.TFTPHelper.createERROR(ERROR_UNDEF)
 
                 if self.done:
                     self.file.close()
-                    self.state = STATE_RECV_LAST
 
-            ack = TFTPHelper.createACK(self.packetnum)
+            ack = proto.TFTPHelper.createACK(self.packetnum)
 
             if not self.done:
                 self.packetnum += 1
@@ -190,6 +215,6 @@ class TFTPState:
             return ack
 
         elif self.state == STATE_ERROR:
-            return TFTPHelper.createERROR(self.error)
+            return proto.TFTPHelper.createERROR(self.error)
 
         return None
