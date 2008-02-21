@@ -31,6 +31,9 @@ import struct
 # size is considered as being the last packet of the transmission.
 TFTP_DEFAULT_PACKET_SIZE = 512
 
+# Enhanced data packet size for LAN networks
+TFTP_LAN_PACKET_SIZE = 1400
+
 # TFTP opcodes
 TFTP_OPCODE_LEN = 2
 
@@ -83,8 +86,7 @@ TFTP_OPTION_BLKSIZE = 'blksize'
 TFTP_OPTION_TIMEOUT = 'timeout'
 TFTP_OPTION_TSIZE = 'tsize'
 
-# UDP datagram size
-UDP_TRANSFER_SIZE = 8192
+TFTP_OPTIONS = [TFTP_OPTION_BLKSIZE, TFTP_OPTION_TIMEOUT, TFTP_OPTION_TSIZE]
 
 # Command verbosity
 _verbose = 1
@@ -115,7 +117,7 @@ class TFTPHelper:
 
         for opt, val in opts.iteritems():
             packet += struct.pack('!%dsc%dsc' % (len(opt), len(str(val))),
-                                  opt, '\0', val, '\0')
+                                  opt, '\0', str(val), '\0')
 
         return packet
 
@@ -154,8 +156,11 @@ class TFTPHelper:
           The ack packet as a string.
         """
 
-        if _verbose > 1:
-            print "  >   %s: %d" % (TFTP_OPS[OP_ACK], num)
+        if _verbose > 1 and num > 0:
+            print "  >   %s: #%d" % (TFTP_OPS[OP_ACK], num)
+        elif _verbose > 0 and num == 0:
+            print "  >   %s: Acknowledging options." % TFTP_OPS[OP_ACK]
+
         return struct.pack('!HH', OP_ACK, num)
 
     def createERROR(errno, errmsg=None):
@@ -192,9 +197,27 @@ class TFTPHelper:
         """
 
         if _verbose > 1:
-            print "  >  %s: %d (len: %d)" % (TFTP_OPS[OP_DATA], num, len(data))
+            print "  >  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, len(data))
         return struct.pack('!HH%ds' % len(data), OP_DATA, num, data)
 
+    def createOACK(opts):
+        """
+        Creates an OACK TFTP packet for the given options.
+
+        Args:
+          opts (dict): a dictionnary of TFTP options.
+        Returns:
+          The OACK packet as a string.
+        """
+
+        if _verbose > 0:
+            print "  >  %s: %s" % (TFTP_OPS[OP_OACK], opts)
+
+        opts_str = ""
+        for opt, val in opts.iteritems():
+            opts_str += "%s%c%s%c" % (opt, '\0', val, '\0')
+
+        return struct.pack('!H%ds' % len(opts_str), OP_OACK, opts_str)
 
     def parseRRQ(request):
         """
@@ -213,14 +236,18 @@ class TFTPHelper:
         # If the length of the parsed list is not even, the packet is
         # malformed and thus parsing should fail.
         if len(packet) % 2 != 0:
-            return None
+            raise SyntaxError
 
         filename = packet[0]
         mode = packet[1].lower()
 
         opts = {}
-        for i in xrange(len(packet[2:])-1):
-            opts[packet[i+2]] = packet[i+3]
+        for i in xrange(2, len(packet)-1, 2):
+            opt = packet[i]
+            val = packet[i+1]
+
+            if opt in TFTP_OPTIONS:
+                opts[opt] = val
 
         try:
             TFTP_MODES.index(mode)
@@ -249,7 +276,7 @@ class TFTPHelper:
         # If the length of the parsed list is not even, the packet is
         # malformed and thus parsing should fail.
         if len(packet) % 2 != 0:
-            return None
+            raise SyntaxError()
 
         filename = packet[0]
         mode = packet[1].lower()
@@ -284,8 +311,11 @@ class TFTPHelper:
             packet = struct.unpack('!H', request)
             num = packet[0]
 
-            if _verbose > 1:
-                print "  <   %s: %d" % (TFTP_OPS[OP_ACK], num),
+            if _verbose > 1 and num > 0:
+                print "  <   %s: #%d" % (TFTP_OPS[OP_ACK], num)
+            elif _verbose > 0 and num == 0:
+                    print "  <   %s: Options acknowledged." % TFTP_OPS[OP_ACK]
+
             return num
         except struct.error:
             raise SyntaxError()
@@ -309,7 +339,7 @@ class TFTPHelper:
             data = request[2:]
 
             if _verbose > 1:
-                print "  <  %s: %d, %d bytes" % (TFTP_OPS[OP_DATA], num, len(data))
+                print "  <  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, len(data))
             return num, data
         except struct.error:
             raise SyntaxError()
@@ -338,6 +368,32 @@ class TFTPHelper:
         except (struct.error, IndexError):
             raise SyntaxError()
 
+    def parseOACK(request):
+        """
+        Parses an OACK packet to extract the validated options.
+
+        Args:
+          request (string): the OACK packet without the TFTP opcode.
+        Returns:
+          A dictionnary of the acknowledged options.
+        """
+
+        packet = request.split('\0')[:-1]
+
+        # If the length of the parsed list is not even, the packet is
+        # malformed and thus parsing should fail.
+        if len(packet) % 2 != 0:
+            raise SyntaxError()
+
+        opts = {}
+        for i in xrange(0, len(packet)-1, 2):
+            opts[packet[i]] = packet[i+1]
+
+        if _verbose > 0:
+            print "  <  %s: %s" % (TFTP_OPS[OP_OACK], opts)
+
+        return opts
+
     def getOP(data):
         if data and len(data) >= 2:
             try:
@@ -352,11 +408,13 @@ class TFTPHelper:
     createACK = staticmethod(createACK)
     createDATA = staticmethod(createDATA)
     createERROR = staticmethod(createERROR)
+    createOACK = staticmethod(createOACK)
 
     parseRRQ = staticmethod(parseRRQ)
     parseWRQ = staticmethod(parseWRQ)
     parseACK = staticmethod(parseACK)
     parseDATA = staticmethod(parseDATA)
     parseERROR = staticmethod(parseERROR)
+    parseOACK = staticmethod(parseOACK)
 
     getOP = staticmethod(getOP)

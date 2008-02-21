@@ -31,22 +31,26 @@ from datetime import timedelta
 import errno
 import getopt
 import os
+import SocketServer
 import stat
 import struct
 import sys
-import SocketServer
 import threading
 import time
 
-from proto import *
-from state import *
+import proto
+import state
 
 _PTFTPD_SERVER_NAME = 'pFTPd'
 _PTFTPD_DEFAULT_PORT = 6969
 _PTFTPD_DEFAULT_PATH = '/tftpboot'
 
+# The global state registry
+PTFTPD_STATE = {}
+
 _port = _PTFTPD_DEFAULT_PORT
 _path = _PTFTPD_DEFAULT_PATH
+_rfc1350 = False
 
 class TFTPServerHandler(SocketServer.DatagramRequestHandler):
     """
@@ -63,18 +67,24 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         response = None
 
         # Get the packet opcode and dispatch
-        try:
-            opn = struct.unpack('!h', request[:2])[0]
-            op = TFTP_OPS[opn]
-            response = getattr(self, "serve%s" % op)(opn, request[2:])
-        except KeyError:
+        opcode = proto.TFTPHelper.getOP(request)
+
+        if not opcode:
+            print "Can't find packet opcode. Packet ignored!"
+            return
+
+        if not proto.TFTP_OPS.has_key(opcode):
             print "Unknown operation %d!" % opn
-            response = TFTPHelper.createERROR(ERROR_ILLEGAL_OP)
+            response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
+
+        try:
+            handler = getattr(self, "serve%s" % proto.TFTP_OPS[opcode])
         except AttributeError:
             print "Unsupported operation %s!" % op
-            response = TFTPHelper.createERROR(ERROR_UNDEF,
-                                              'Operation not supported by server.')
+            response = proto.TFTPHelper.createERROR(proto.ERROR_UNDEF,
+                                                    'Operation not supported by server.')
 
+        response = handler(opcode, request[2:])
         if response:
             self.wfile.write(response)
             self.wfile.flush()
@@ -92,26 +102,41 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         """
 
         try:
-            filename, mode, opts = TFTPHelper.parseRRQ(request)
+            filename, mode, opts = proto.TFTPHelper.parseRRQ(request)
         except SyntaxError:
             # Ignore malformed RRQ requests
             return None
 
-        peer_state = TFTPState(self.client_address, op, filename, mode, opts)
+        peer_state = state.TFTPState(self.client_address, op, filename, mode)
+
+        # Only set options if not running in RFC1350 compliance mode
+        if not _rfc1350:
+            peer_state.parse_options(opts)
 
         try:
-            peer_state.file = open(os.path.join(_path, filename))
+            filepath = os.path.join(_path, filename)
+
+            peer_state.file = open(filepath)
+            peer_state.filesize = os.stat(filepath)[stat.ST_SIZE]
             peer_state.packetnum = 0
-            peer_state.state = 'send'
+
+            # In RFC1350 compliance mode, start sending data
+            # immediately. Otherwise, send an OACK to the
+            # client.
+            if _rfc1350:
+                peer_state.state = state.STATE_SEND
+            else:
+                peer_state.state = state.STATE_SEND_OACK
+
         except IOError, e:
-            peer_state.state = 'error'
+            peer_state.state = state.STATE_ERROR
 
             if e.errno == errno.ENOENT:
-                peer_state.error = ERROR_FILE_NOT_FOUND
+                peer_state.error = proto.ERROR_FILE_NOT_FOUND
             elif e.errno == errno.EACCES or e.errno == errno.EPERM:
-                peer_state.error = ERROR_ACCESS_VIOLATION
+                peer_state.error = proto.ERROR_ACCESS_VIOLATION
             else:
-                peer_state.error = ERROR_UNDEF
+                peer_state.error = proto.ERROR_UNDEF
 
         PTFTPD_STATE[self.client_address] = peer_state
         return peer_state.next()
@@ -129,34 +154,45 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         """
 
         try:
-            filename, mode, opts = TFTPHelper.parseWRQ(request)
+            filename, mode, opts = proto.TFTPHelper.parseWRQ(request)
         except SyntaxError:
             # Ignore malfored WRQ requests
             return None
 
-        peer_state = TFTPState(self.client_address, op, filename, mode, opts)
+        peer_state = state.TFTPState(self.client_address, op, filename, mode)
+
+        # Only set options if not running in RFC1350 compliance mode
+        if not _rfc1350:
+            peer_state.parse_options(opts)
 
         path = os.path.join(_path, filename)
         try:
             # Try to open the file. If it succeeds, it means the file
             # already exists and report the error
             peer_state.file = open(path)
-            peer_state.state = 'error'
-            peer_state.error = ERROR_FILE_ALREADY_EXISTS
+            peer_state.state = state.STATE_ERROR
+            peer_state.error = proto.ERROR_FILE_ALREADY_EXISTS
         except IOError, e:
             # Otherwise, if the open failed because the file did not
-            # exist, create it and start receiving data
+            # exist, create it and go on
             if e.errno == errno.ENOENT:
                 try:
                     peer_state.file = open(path, 'w')
                     peer_state.packetnum = 0
-                    peer_state.state = 'recv'
+
+                    # In RFC1350 compliance mode, start receiving data
+                    # immediately. Otherwise, send an OACK to the
+                    # client.
+                    if _rfc1350:
+                        peer_state.state = state.STATE_RECV
+                    else:
+                        peer_state.state = state.STATE_OACK
                 except IOError:
-                    peer_state.state = 'error'
-                    peer_state.error = ERROR_ACCESS_VIOLATION
+                    peer_state.state = state.STATE_ERROR
+                    peer_state.error = proto.ERROR_ACCESS_VIOLATION
             else:
-                peer_state.state = 'error'
-                peer_state.error = ERROR_ACCESS_VIOLATION
+                peer_state.state = state.STATE_ERROR
+                peer_state.error = proto.ERROR_ACCESS_VIOLATION
 
         PTFTPD_STATE[self.client_address] = peer_state
         return peer_state.next()
@@ -170,11 +206,11 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
           request: the TFTP packet without its opcode (string).
         Returns:
           A response packet (as a string) or None if the request is
-          ignored for some reason.
+          ignored or completed.
         """
 
         try:
-            num = TFTPHelper.parseACK(request)
+            num = proto.TFTPHelper.parseACK(request)
         except SyntaxError:
             # Ignore malfored ACK packets
             return None
@@ -182,29 +218,39 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         try:
             peer_state = PTFTPD_STATE[self.client_address]
         except KeyError:
-            peer_state = TFTPState(self.client_address, op, None, None, None)
-            peer_state.state = 'error'
-            peer_state.error = ERROR_UNKNOWN_ID
+            return proto.TFTPHelper.createERROR(ERROR_UNKNOWN_ID)
 
-            PTFTPD_STATE[self.client_address] = peer_state
+        if peer_state.state == state.STATE_SEND_OACK:
+            if num != 0:
+                print 'Client did not reply correctly to the OACK packet. Aborting transmission.'
+                peer_state.state = state.STATE_ERROR
+                peer_state.error = proto.ERROR_ILLEGAL_OP
+            else:
+                peer_state.state = state.STATE_SEND
+
             return peer_state.next()
 
-        if peer_state.state == 'send':
+        elif peer_state.state == state.STATE_SEND:
             if peer_state.packetnum != num:
                 print 'Got ACK with incoherent data packet number. Aborting transfer.'
-                peer_state.state = 'error'
-                peer_state.error = ERROR_ILLEGAL_OP
+                peer_state.state = state.STATE_ERROR
+                peer_state.error = proto.ERROR_ILLEGAL_OP
 
             return peer_state.next()
-        elif peer_state.state == 'error':
-            print 'Error ACKed. Terminating transfer.'
-        elif peer_state.state == 'last':
-            peer_state.file.close()
-        else:
-            print 'ERROR: Unexpected ACK!'
 
+        elif peer_state.state == state.STATE_ERROR:
+            print 'Error ACKed. Terminating transfer.'
+            return None
+
+        elif peer_state.state == state.STATE_SEND_LAST:
+            print "  >  DATA: %d data packet(s) sent." % peer_state.packetnum
+            print "  <   ACK: Transfer complete, %d byte(s)." % peer_state.filesize
+            peer_state.file.close()
+            return None
+
+        print 'ERROR: Unexpected ACK!'
         PTFTPD_STATE.pop(self.client_address)
-        return None
+        return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
     def serveDATA(self, op, request):
         """
@@ -219,7 +265,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         """
 
         try:
-            num, data = TFTPHelper.parseDATA(request)
+            num, data = proto.TFTPHelper.parseDATA(request)
         except SyntaxError:
             # Ignore malformed DATA packets
             return None
@@ -227,20 +273,26 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         try:
             peer_state = PTFTPD_STATE[self.client_address]
         except KeyError:
-            peer_state = TFTPState(self.client_address, op, None, None, None)
-            peer_state.state = 'error'
-            peer_state.error = ERROR_UNKNOWN_ID
+            return proto.TFTPHelper.createERROR(proto.ERROR_UNKNOWN_ID)
 
-            PTFTPD_STATE[self.client_address] = peer_state
+        if peer_state.state == state.STATE_RECV:
+            if num != peer_state.packetnum:
+                peer_state.state = state.STATE_ERROR
+                peer_state.error = proto.ERROR_ILLEGAL_OP
+            else:
+                peer_state.data = data
+
             return peer_state.next()
 
-        if num != peer_state.packetnum:
-            peer_state.state = 'error'
-            peer_state.error = ERROR_ILLEGAL_OP
-        else:
-            peer_state.data = data
+        elif peer_state.state == state.STATE_RECV_LAST:
+            print "  <  DATA: %d packet(s) recevied." % peer_state.packetnum
+            print "  >   ACK: Transfer complete, %d byte(s)." % peer_state.filesize
+            peer_state.file.close()
+            return None
 
-        return peer_state.next()
+        print 'ERROR: Unexpected DATA!'
+        PTFTPD_STATE.pop(self.client_address)
+        return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
     def serveERROR(self, op, request):
         """
@@ -255,7 +307,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         """
 
         try:
-            errno, errmsg = TFTPHelper.parseERROR(request)
+            errno, errmsg = proto.TFTPHelper.parseERROR(request)
         except SyntaxError:
             # Ignore malformed ERROR packets
             return None
@@ -288,6 +340,12 @@ class TFTPServerTimeouter(threading.Thread):
                     toremove.append(peer)
 
             for peer in toremove:
+                if PTFTPD_STATE[peer].file:
+                    try:
+                        PTFTPD_STATE[peer].file.close()
+                    except AttributeError:
+                        pass
+
                 del PTFTPD_STATE[peer]
 
             # Go to sleep
@@ -311,19 +369,21 @@ def usage():
     print "  -p    --port      Set TFTP listen port (default: %d)" % _PTFTPD_DEFAULT_PORT
     print "  -b    --basepath  Set TFTP root path (default: %s)" % _PTFTPD_DEFAULT_PATH
     print
-    pass
+    print "To disable the use of TFTP extensions:"
+    print "  -r    --rfc1350   Strictly comply to the RFC1350 only (no extensions)"
+    print
 
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'hp:b:',
-                                   ['help', 'port=', 'basepath='])
+        opts, args = getopt.getopt(sys.argv[1:], '?p:b:r',
+                                   ['help', 'port=', 'basepath=', 'rfc1350'])
     except getopt.GetoptError:
         # Print usage and exit
         usage()
         sys.exit(1)
 
     for opt, val in opts:
-        if opt in ('-h', '--help'):
+        if opt in ('-?', '--help'):
             usage()
             sys.exit(0)
         if opt in ('-p', '--port'):
@@ -334,12 +394,16 @@ if __name__ == '__main__':
                 sys.exit(2)
         if opt in ('-b', '--basepath'):
             _path = val
+        if opt in ('-r', '--rfc1350'):
+            _rfc1350 = True
 
     if checkBasePath(_path):
         try:
             server = SocketServer.UDPServer(('', _port), TFTPServerHandler)
             timeouter = TFTPServerTimeouter()
 
+            if _rfc1350:
+                print 'Running in RFC1350 compliance mode.'
             print ("%s serving %s on port %d..." %
                    (_PTFTPD_SERVER_NAME, _path, _port))
 
