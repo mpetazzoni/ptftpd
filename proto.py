@@ -95,7 +95,7 @@ TFTP_TIMEOUT_MIN = 1
 TFTP_TIMEOUT_MAX = 255
 
 # Command verbosity
-_verbose = 1
+verbose = 0
 
 class TFTPHelper:
     """
@@ -114,7 +114,7 @@ class TFTPHelper:
           The request packet as a string.
         """
 
-        if _verbose > 0:
+        if verbose > 0:
             print ("  >   %s: %s (mode: %s, opts: %s)" %
                    (TFTP_OPS[OP_RRQ], filename, mode, opts))
 
@@ -139,7 +139,7 @@ class TFTPHelper:
           The request packet as a string.
         """
 
-        if _verbose > 0:
+        if verbose > 0:
             print ("  >   %s: %s (mode: %s, opts: %s)" %
                    (TFTP_OPS[OP_WRQ], filename, mode, opts))
 
@@ -162,9 +162,9 @@ class TFTPHelper:
           The ack packet as a string.
         """
 
-        if _verbose > 1 and num > 0:
+        if verbose > 1 and num > 0:
             print "  >   %s: #%d" % (TFTP_OPS[OP_ACK], num)
-        elif _verbose > 0 and num == 0:
+        elif verbose > 0 and num == 0:
             print "  >   %s: Acknowledging transfer." % TFTP_OPS[OP_ACK]
 
         return struct.pack('!HH', OP_ACK, num)
@@ -186,7 +186,7 @@ class TFTPHelper:
         if errno == ERROR_UNDEF and errmsg:
             error = errmsg
 
-        if _verbose > 0:
+        if verbose > 0:
             print "  > %s: %d %s" % (TFTP_OPS[OP_ERROR], errno, error)
         return struct.pack('!HH%dsc' % len(error),
                            OP_ERROR, errno, error, '\0')
@@ -202,7 +202,7 @@ class TFTPHelper:
           The data packet as a string.
         """
 
-        if _verbose > 1:
+        if verbose > 1:
             print "  >  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, len(data))
         return struct.pack('!HH%ds' % len(data), OP_DATA, num, data)
 
@@ -216,7 +216,7 @@ class TFTPHelper:
           The OACK packet as a string.
         """
 
-        if _verbose > 0:
+        if verbose > 0:
             print "  >  %s: %s" % (TFTP_OPS[OP_OACK], opts)
 
         opts_str = ""
@@ -258,7 +258,7 @@ class TFTPHelper:
         try:
             TFTP_MODES.index(mode)
             if filename != '':
-                if _verbose > 0:
+                if verbose > 0:
                     print ("  <   %s: %s (mode: %s, opts: %s)" %
                            (TFTP_OPS[OP_RRQ], filename, mode, opts))
                 return filename, mode, opts
@@ -298,7 +298,7 @@ class TFTPHelper:
         try:
             TFTP_MODES.index(mode)
             if filename != '':
-                if _verbose > 0:
+                if verbose > 0:
                     print ("  <   %s: %s (mode: %s, opts: %s)" %
                            (TFTP_OPS[OP_WRQ], filename, mode, opts))
                 return filename, mode, opts
@@ -321,9 +321,9 @@ class TFTPHelper:
             packet = struct.unpack('!H', request)
             num = packet[0]
 
-            if _verbose > 1 and num > 0:
+            if verbose > 1 and num > 0:
                 print "  <   %s: #%d" % (TFTP_OPS[OP_ACK], num)
-            elif _verbose > 0 and num == 0:
+            elif verbose > 0 and num == 0:
                     print "  <   %s: Transfer acknowledged." % TFTP_OPS[OP_ACK]
 
             return num
@@ -348,7 +348,7 @@ class TFTPHelper:
             num = packet[0]
             data = request[2:]
 
-            if _verbose > 1:
+            if verbose > 1:
                 print "  <  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, len(data))
             return num, data
         except struct.error:
@@ -372,7 +372,7 @@ class TFTPHelper:
             errno = packet[0]
             errmsg = request[2:].split('\0')[0]
 
-            if _verbose > 0:
+            if verbose > 0:
                 print "  < %s: %s" % (TFTP_OPS[OP_ERROR], errmsg)
             return errno, errmsg
         except (struct.error, IndexError):
@@ -399,7 +399,7 @@ class TFTPHelper:
         for i in xrange(0, len(packet)-1, 2):
             opts[packet[i]] = packet[i+1]
 
-        if _verbose > 0:
+        if verbose > 0:
             print "  <  %s: %s" % (TFTP_OPS[OP_OACK], opts)
 
         return opts

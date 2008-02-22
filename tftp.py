@@ -31,6 +31,8 @@ Note that this program currently does *not* support the timeout
 interval option from RFC2349.
 """
 
+from datetime import datetime
+from datetime import timedelta
 import errno
 import getopt
 import os
@@ -450,10 +452,16 @@ class TFTPClient:
         if not self.rfc1350:
             opts[proto.TFTP_OPTION_TSIZE] = 0
 
+
+        # Everything's OK, let's go
+        print "Retrieving '%s' from the remote host..." % filename
+
         packet = proto.TFTPHelper.createRRQ(filepath, self.transfer_mode, opts)
 
+        transfer_start = datetime.today()
         self.sock.sendto(packet, self.peer)
         self.handle()
+        transfer_time = datetime.today() - transfer_start
 
         if self.error:
             error, errmsg = self.error
@@ -461,8 +469,9 @@ class TFTPClient:
                 print 'Error:', errmsg
             return False
 
-        print "  <  DATA: %d data packet(s) recevied." % self.PTFTP_STATE.packetnum
-        print "  >   ACK: Transfer complete, %d byte(s)." % self.PTFTP_STATE.filesize
+        print ("Transfer complete, %d bytes (%.2f kB/s)" %
+               (self.PTFTP_STATE.filesize,
+                self.__get_speed(self.PTFTP_STATE.filesize, transfer_time)))
         return True
 
     def put(self, args):
@@ -503,10 +512,16 @@ class TFTPClient:
         if not self.rfc1350:
             opts[proto.TFTP_OPTION_TSIZE] = self.PTFTP_STATE.filesize
 
+
+        # Everything's OK, let's go
+        print "Pushing '%s' to the remote host..." % filename
+
         packet = proto.TFTPHelper.createWRQ(filename, self.transfer_mode, opts)
 
+        transfer_start = datetime.today()
         self.sock.sendto(packet, self.peer)
         self.handle()
+        transfer_time = datetime.today() - transfer_start
 
         if self.error:
             error, errmsg = self.error
@@ -514,8 +529,9 @@ class TFTPClient:
                 print 'Error:', errmsg
             return False
 
-        print "  >  DATA: %d data packet(s) sent." % self.PTFTP_STATE.packetnum
-        print "  <   ACK: Transfer complete, %d byte(s)." % self.PTFTP_STATE.filesize
+        print ("Transfer complete, %d bytes (%.2f kB/s)" %
+               (self.PTFTP_STATE.filesize,
+                self.__get_speed(self.PTFTP_STATE.filesize, transfer_time)))
         return True
 
     def mode(self, args):
@@ -549,6 +565,8 @@ class TFTPClient:
         except ValueError:
             print 'Block size must be a number!'
 
+    def __get_speed(self, filesize, time):
+        return filesize / 1024.0 / (time.seconds + time.microseconds / 1000000.0)
 
 def usage():
     print "usage: %s [options]" % sys.argv[0]

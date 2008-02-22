@@ -176,7 +176,7 @@ class TFTPState:
 
         # Convert LF to CRLF if needed
         if self.mode == 'netascii':
-            fromfile = OCTET_TO_NETASCII.sub('\r\n', fromfile)
+            fromfile = proto.OCTET_TO_NETASCII.sub('\r\n', fromfile)
 
         self.data = self.tosend + fromfile
         self.tosend = ""
@@ -199,7 +199,7 @@ class TFTPState:
 
             # Convert CRLF to LF if needed
             if self.mode == 'netascii':
-                self.data = re.sub('\r\n', '\n', self.data)
+                self.data = proto.NETASCII_TO_OCTET('\n', self.data)
 
             try:
                 self.filesize += len(self.data)

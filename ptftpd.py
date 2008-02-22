@@ -117,14 +117,22 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             peer_state.file = open(path)
             peer_state.filesize = os.stat(path)[stat.ST_SIZE]
             peer_state.packetnum = 0
+            peer_state.state = state.STATE_SEND
 
-            # In RFC1350 compliance mode, start sending data
-            # immediately. Otherwise, send an OACK to the
-            # client.
-            if _rfc1350:
-                peer_state.state = state.STATE_SEND
-            else:
-                peer_state.state = state.STATE_SEND_OACK
+            # Only set options if not running in RFC1350 compliance mode
+            # and when option were received.
+            if not _rfc1350 and len(opts):
+                opts = proto.TFTPHelper.parse_options(opts)
+                if opts:
+                    # HOOK: this is where we should check that we accept
+                    # the options requested by the client.
+
+                    peer_state.state = state.STATE_SEND_OACK
+                    peer_state.set_opts(opts)
+                else:
+                    peer_state.file.close()
+                    peer_state.state = state.STATE_ERROR
+                    peer_state.error = proto.ERROR_OPTION_NEGOCIATION
 
         except IOError, e:
             peer_state.state = state.STATE_ERROR
@@ -136,18 +144,6 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             else:
                 peer_state.error = proto.ERROR_UNDEF
 
-        # Only set options if not running in RFC1350 compliance mode
-        if not _rfc1350:
-            opts = proto.TFTPHelper.parse_options(opts)
-            if opts:
-                # HOOK: this is where we should check that we accept
-                # the options requested by the client.
-
-                peer_state.set_opts(opts)
-            else:
-                peer_state.file.close()
-                peer_state.state = state.STATE_ERROR
-                peer_state.error = proto.ERROR_OPTION_NEGOCIATION
 
         PTFTPD_STATE[self.client_address] = peer_state
         return peer_state.next()
@@ -179,40 +175,35 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             peer_state.file = open(path)
             peer_state.state = state.STATE_ERROR
             peer_state.error = proto.ERROR_FILE_ALREADY_EXISTS
+
+            # Only set options if not running in RFC1350 compliance mode
+            if not _rfc1350 and len(opts):
+                opts = proto.TFTPHelper.parse_options(opts)
+                if opts:
+                    # HOOK: this is where we should check that we accept
+                    # the options requested by the client.
+
+                    peer_state.packetnum = 1
+                    peer_state.state = state.STATE_SEND_OACK
+                    peer_state.set_opts(opts)
+                else:
+                    peer_state.state = state.STATE_ERROR
+                    peer_state.error = proto.ERROR_OPTION_NEGOCIATION
+
         except IOError, e:
             # Otherwise, if the open failed because the file did not
             # exist, create it and go on
             if e.errno == errno.ENOENT:
                 try:
                     peer_state.file = open(path, 'w')
-
-                    # In RFC1350 compliance mode, start receiving data
-                    # immediately. Otherwise, send an OACK to the
-                    # client.
-                    if _rfc1350:
-                        peer_state.packetnum = 0
-                        peer_state.state = state.STATE_RECV
-                    else:
-                        peer_state.packetnum = 1
-                        peer_state.state = state.STATE_SEND_OACK
+                    peer_state.packetnum = 0
+                    peer_state.state = state.STATE_RECV
                 except IOError:
                     peer_state.state = state.STATE_ERROR
                     peer_state.error = proto.ERROR_ACCESS_VIOLATION
             else:
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
-
-        # Only set options if not running in RFC1350 compliance mode
-        if not _rfc1350:
-            opts = proto.TFTPHelper.parse_options(opts)
-            if opts:
-                # HOOK: this is where we should check that we accept
-                # the options requested by the client.
-
-                peer_state.set_opts(opts)
-            else:
-                peer_state.state = state.STATE_ERROR
-                peer_state.error = proto.ERROR_OPTION_NEGOCIATION
 
         PTFTPD_STATE[self.client_address] = peer_state
         return peer_state.next()
@@ -438,6 +429,10 @@ if __name__ == '__main__':
             # Override the UDP read packet size to accomodate TFTP
             # block sizes larger than 8192.
             server.max_packet_size = proto.TFTP_BLKSIZE_MAX + 4
+
+            # Increase TFTP protocol packet creation/parsing
+            # verbosity.
+            proto.verbose = 1
 
             timeouter = TFTPServerTimeouter()
 
