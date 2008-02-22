@@ -1,9 +1,9 @@
 pTFTPd - A Python TFTP server
 
 pTFTPd is a simple TFTP daemon written in Python. It fully supports
-the TFTP specification as defined in RFC1350. It also supports the TFTP
-Option Extension protocol (per RFC2347), although the specific options
-themselves are not yet supported (RFC2348 and RFC2349).
+the TFTP specification as defined in RFC1350. It also supports the
+TFTP Option Extension protocol (per RFC2347), the block size option as
+defined in RFC2348 and the transfer size option from RFC2349.
 
 Usage:
 
