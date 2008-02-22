@@ -32,7 +32,7 @@ STATE_RECV = 8
 STATE_RECV_OACK = 16
 STATE_ERROR = 32
 
-STATE_TIMEOUT_SECS = 30
+STATE_TIMEOUT_SECS = 10
 
 class TFTPState:
     """
@@ -66,9 +66,7 @@ class TFTPState:
         self.done = False
 
         # Option defaults
-        self.opts = {
-            proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE,
-            }
+        self.opts = { proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE }
 
         self.last_seen = datetime.today()
 
@@ -86,39 +84,6 @@ class TFTPState:
         except AttributeError:
             pass
 
-    def purge(self):
-        """
-        Remove the used file on demand.
-        """
-
-        if self.op == proto.OP_WRQ and self.filepath and self.file:
-            try:
-                os.remove(self.filepath)
-            except OSError:
-                pass
-
-    def parse_options(self, opts):
-        """
-        Parse the given validated options.
-
-        Args:
-          opts (dict): a dictionnary of validated TFTP options to use.
-        Returns:
-          A list of the options parsed.
-        """
-
-        # Parse options
-        if not opts:
-            return
-
-        used = []
-
-        if opts.has_key(proto.TFTP_OPTION_BLKSIZE):
-            self.opts[proto.TFTP_OPTION_BLKSIZE] = int(opts[proto.TFTP_OPTION_BLKSIZE])
-            used.append(proto.TFTP_OPTION_BLKSIZE)
-
-        return used
-
     def __str__(self):
         s = "TFTPState/%s for %s\n" % (proto.TFTP_OPS[self.op], self.peer)
         s += "  filepath: %s\n" % self.filepath
@@ -131,6 +96,18 @@ class TFTPState:
     def __repr__(self):
         return self.__str__()
 
+    def purge(self):
+        """
+        Remove the used file on demand.
+        """
+
+        if self.filepath and self.file:
+            try:
+                os.remove(self.filepath)
+                return True
+            except OSError:
+                return False
+
     def ping(self):
         """
         Update the last seen value to restart the watchdog.
@@ -138,12 +115,28 @@ class TFTPState:
 
         self.last_seen = datetime.today()
 
+    def set_opts(self, opts):
+        """
+        Set this state options.
+
+        Args:
+          opts (dict): a dictionnary of validated options.
+        """
+
+        if not opts:
+            return
+
+        if opts.has_key(proto.TFTP_OPTION_TSIZE) and opts[proto.TFTP_OPTION_TSIZE] == 0:
+            opts[proto.TFTP_OPTION_TSIZE] = self.filesize
+
+        self.opts = opts
+
     def next(self):
         """
         Returns the next packet to be sent depending on this state.
 
         Args:
-          none
+          None.
         Returns:
           The next packet to be sent, as a string (built through TFTPHelper)
           or None if no action is required.
@@ -152,69 +145,81 @@ class TFTPState:
         self.ping()
 
         if self.state == STATE_SEND_OACK:
-            if self.op == proto.OP_RRQ:
-                self.state = STATE_SEND
-            else:
-                self.state = STATE_RECV
-
-            return proto.TFTPHelper.createOACK(self.opts)
-
+            return self.__next_send_oack()
         elif self.state == STATE_RECV_OACK:
-            self.state = STATE_RECV
-            return proto.TFTPHelper.createACK(0)
-
+            return self.__next_recv_oack()
         elif self.state == STATE_SEND:
-            blksize = self.opts[proto.TFTP_OPTION_BLKSIZE]
-            fromfile = self.file.read(blksize - len(self.tosend))
-
-            # Convert LF to CRLF if needed
-            if self.mode == 'netascii':
-                fromfile = OCTET_TO_NETASCII.sub('\r\n', fromfile)
-
-            self.data = self.tosend + fromfile
-            self.tosend = ""
-
-            self.packetnum += 1
-
-            if len(self.data) > blksize:
-                self.tosend = self.data[blksize:]
-                self.data = self.data[:blksize]
-            elif len(self.data) < blksize:
-                self.file.close()
-                self.state = STATE_SEND_LAST
-
-            return proto.TFTPHelper.createDATA(self.packetnum, self.data)
-
+            return self.__next_send()
         elif self.state == STATE_RECV:
-            if self.data or self.data == '':
-                if len(self.data) < self.opts[proto.TFTP_OPTION_BLKSIZE]:
-                    self.done = True
-
-                # Convert CRLF to LF if needed
-                if self.mode == 'netascii':
-                    self.data = re.sub('\r\n', '\n', self.data)
-
-                try:
-                    self.filesize += len(self.data)
-                    self.file.write(self.data)
-                except IOError, e:
-                    self.file.close()
-                    if e.errno == errno.ENOSPC:
-                        return proto.TFTPHelper.createERROR(ERROR_DISK_FULL)
-                    else:
-                        return proto.TFTPHelper.createERROR(ERROR_UNDEF)
-
-                if self.done:
-                    self.file.close()
-
-            ack = proto.TFTPHelper.createACK(self.packetnum)
-
-            if not self.done:
-                self.packetnum += 1
-
-            return ack
-
+            return self.__next_recv()
         elif self.state == STATE_ERROR:
-            return proto.TFTPHelper.createERROR(self.error)
+            return self.__next_error()
 
         return None
+
+    def __next_send_oack(self):
+        if self.op == proto.OP_RRQ:
+            self.state = STATE_SEND
+        else:
+            self.state = STATE_RECV
+
+        return proto.TFTPHelper.createOACK(self.opts)
+
+    def __next_recv_oack(self):
+        self.state = STATE_RECV
+
+        return proto.TFTPHelper.createACK(0)
+
+    def __next_send(self):
+        blksize = self.opts[proto.TFTP_OPTION_BLKSIZE]
+        fromfile = self.file.read(blksize - len(self.tosend))
+
+        # Convert LF to CRLF if needed
+        if self.mode == 'netascii':
+            fromfile = OCTET_TO_NETASCII.sub('\r\n', fromfile)
+
+        self.data = self.tosend + fromfile
+        self.tosend = ""
+
+        self.packetnum += 1
+
+        if len(self.data) > blksize:
+            self.tosend = self.data[blksize:]
+            self.data = self.data[:blksize]
+        elif len(self.data) < blksize:
+            self.file.close()
+            self.state = STATE_SEND_LAST
+
+        return proto.TFTPHelper.createDATA(self.packetnum, self.data)
+
+    def __next_recv(self):
+        if self.data or self.data == '':
+            if len(self.data) < self.opts[proto.TFTP_OPTION_BLKSIZE]:
+                self.done = True
+
+            # Convert CRLF to LF if needed
+            if self.mode == 'netascii':
+                self.data = re.sub('\r\n', '\n', self.data)
+
+            try:
+                self.filesize += len(self.data)
+                self.file.write(self.data)
+            except IOError, e:
+                self.file.close()
+                if e.errno == errno.ENOSPC:
+                    return proto.TFTPHelper.createERROR(ERROR_DISK_FULL)
+                else:
+                    return proto.TFTPHelper.createERROR(ERROR_UNDEF)
+
+            if self.done:
+                self.file.close()
+
+        ack = proto.TFTPHelper.createACK(self.packetnum)
+
+        if not self.done:
+            self.packetnum += 1
+
+        return ack
+
+    def __next_error(self):
+        return proto.TFTPHelper.createERROR(self.error)

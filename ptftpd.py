@@ -23,11 +23,10 @@
 pTFTPd is a simple TFTP daemon written in Python. It fully supports
 the TFTP specification as defined in RFC1350. It also supports the
 TFTP Option Extension protocol (per RFC2347), the block size option as
-defined in RFC2348 and the timeout interval and transfer size options
-from RFC2349.
+defined in RFC2348 and the transfer size option from RFC2349.
 
-Note that this program currently does *not* have any retry/re-transmit
-capabilities and thus may not accomodate very low quality networks.
+Note that this program currently does *not* support the timeout
+interval option from RFC2349.
 """
 
 from datetime import datetime
@@ -114,10 +113,6 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         path = os.path.join(_path, filename)
         peer_state = state.TFTPState(self.client_address, op, path, mode)
 
-        # Only set options if not running in RFC1350 compliance mode
-        if not _rfc1350:
-            peer_state.parse_options(self.__filter_options(opts))
-
         try:
             peer_state.file = open(path)
             peer_state.filesize = os.stat(path)[stat.ST_SIZE]
@@ -140,6 +135,19 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
             else:
                 peer_state.error = proto.ERROR_UNDEF
+
+        # Only set options if not running in RFC1350 compliance mode
+        if not _rfc1350:
+            opts = proto.TFTPHelper.parse_options(opts)
+            if opts:
+                # HOOK: this is where we should check that we accept
+                # the options requested by the client.
+
+                peer_state.set_opts(opts)
+            else:
+                peer_state.file.close()
+                peer_state.state = state.STATE_ERROR
+                peer_state.error = proto.ERROR_OPTION_NEGOCIATION
 
         PTFTPD_STATE[self.client_address] = peer_state
         return peer_state.next()
@@ -164,10 +172,6 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         path = os.path.join(_path, filename)
         peer_state = state.TFTPState(self.client_address, op, path, mode)
-
-        # Only set options if not running in RFC1350 compliance mode
-        if not _rfc1350:
-            peer_state.parse_options(self.__filter_options(opts))
 
         try:
             # Try to open the file. If it succeeds, it means the file
@@ -197,6 +201,18 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             else:
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
+
+        # Only set options if not running in RFC1350 compliance mode
+        if not _rfc1350:
+            opts = proto.TFTPHelper.parse_options(opts)
+            if opts:
+                # HOOK: this is where we should check that we accept
+                # the options requested by the client.
+
+                peer_state.set_opts(opts)
+            else:
+                peer_state.state = state.STATE_ERROR
+                peer_state.error = proto.ERROR_OPTION_NEGOCIATION
 
         PTFTPD_STATE[self.client_address] = peer_state
         return peer_state.next()
@@ -257,7 +273,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         print 'ERROR: Unexpected ACK!'
 
-        peer_state.purge()
+        if peer_state.op == proto.OP_WRQ:
+            peer_state.purge()
         del PTFTPD_STATE[self.client_address]
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
@@ -305,7 +322,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         print 'ERROR: Unexpected DATA!'
 
-        peer_state.purge()
+        if peer_state.op == proto.OP_WRQ:
+            peer_state.purge()
         del PTFTPD_STATE[self.client_address]
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
@@ -330,13 +348,13 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         # An error packet immediately terminates a connection
         if PTFTPD_STATE.has_key(self.client_address):
             peer_state = PTFTPD_STATE[self.client_address]
-            peer_state.purge()
+
+            if peer_state.op == proto.OP_WRQ:
+                peer_state.purge()
             del PTFTPD_STATE[self.client_address]
 
         return None
 
-    def __filter_options(self, opts):
-        return opts
 
 class TFTPServerTimeouter(threading.Thread):
     """
@@ -360,7 +378,8 @@ class TFTPServerTimeouter(threading.Thread):
                     toremove.append(peer)
 
             for peer in toremove:
-                PTFTPD_STATE[peer].purge()
+                if PTFTPD_STATE[peer].op == proto.OP_WRQ:
+                    PTFTPD_STATE[peer].purge()
                 del PTFTPD_STATE[peer]
 
             # Go to sleep
@@ -415,6 +434,11 @@ if __name__ == '__main__':
     if checkBasePath(_path):
         try:
             server = SocketServer.UDPServer(('', _port), TFTPServerHandler)
+
+            # Override the UDP read packet size to accomodate TFTP
+            # block sizes larger than 8192.
+            server.max_packet_size = proto.TFTP_BLKSIZE_MAX + 4
+
             timeouter = TFTPServerTimeouter()
 
             if _rfc1350:

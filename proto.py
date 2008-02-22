@@ -88,6 +88,12 @@ TFTP_OPTION_TSIZE = 'tsize'
 
 TFTP_OPTIONS = [TFTP_OPTION_BLKSIZE, TFTP_OPTION_TIMEOUT, TFTP_OPTION_TSIZE]
 
+TFTP_BLKSIZE_MIN = 8
+TFTP_BLKSIZE_MAX = 65464
+
+TFTP_TIMEOUT_MIN = 1
+TFTP_TIMEOUT_MAX = 255
+
 # Command verbosity
 _verbose = 1
 
@@ -243,7 +249,7 @@ class TFTPHelper:
 
         opts = {}
         for i in xrange(2, len(packet)-1, 2):
-            opt = packet[i]
+            opt = packet[i].lower()
             val = packet[i+1]
 
             if opt in TFTP_OPTIONS:
@@ -282,8 +288,12 @@ class TFTPHelper:
         mode = packet[1].lower()
 
         opts = {}
-        for i in xrange(len(packet[2:])-1):
-            opts[packet[i+2]] = packet[i+3]
+        for i in xrange(2, len(packet)-1, 2):
+            opt = packet[i].lower()
+            val = packet[i+1]
+
+            if opt in TFTP_OPTIONS:
+                opts[opt] = val
 
         try:
             TFTP_MODES.index(mode)
@@ -403,6 +413,39 @@ class TFTPHelper:
 
         return None
 
+    def parse_options(opts):
+        """
+        Parse and validate the given options.
+
+        Args:
+          opts (dict): a dictionnary of validated TFTP options to use.
+        Returns:
+          The clean dictionnary of options.
+        """
+
+        used = {}
+
+        if opts.has_key(TFTP_OPTION_BLKSIZE):
+            blksize = int(opts[TFTP_OPTION_BLKSIZE])
+            if blksize >= TFTP_BLKSIZE_MIN and blksize <= TFTP_BLKSIZE_MAX:
+                used[TFTP_OPTION_BLKSIZE] = blksize
+            else:
+                return None
+        else:
+            used[TFTP_OPTION_BLKSIZE] = TFTP_DEFAULT_PACKET_SIZE
+
+        if opts.has_key(TFTP_OPTION_TIMEOUT):
+            timeout = int(opts[TFTP_OPTION_TIMEOUT])
+            if timeout >= TFTP_TIMEOUT_MIN and timeout <= TFTP_TIMEOUT_MAX:
+                used[TFTP_OPTION_TIMEOUT] = timeout
+            else:
+                return None
+
+        if opts.has_key(TFTP_OPTION_TSIZE):
+            used[TFTP_OPTION_TSIZE] = int(opts[TFTP_OPTION_TSIZE])
+
+        return used
+
     createRRQ = staticmethod(createRRQ)
     createWRQ = staticmethod(createWRQ)
     createACK = staticmethod(createACK)
@@ -418,3 +461,4 @@ class TFTPHelper:
     parseOACK = staticmethod(parseOACK)
 
     getOP = staticmethod(getOP)
+    parse_options = staticmethod(parse_options)

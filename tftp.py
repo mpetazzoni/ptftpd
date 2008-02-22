@@ -24,11 +24,11 @@
 This is a very simple TFTP client that supports pull/push files from a
 TFTP server. It fully supports the TFTP specification as defined in
 RFC1350. It also supports the TFTP Option Extension protocol (per
-RFC2347), the block size option as defined in RFC2348 and the timeout
-interval and transfer size options from RFC2349.
+RFC2347), the block size option as defined in RFC2348 and the transfer
+size option from RFC2349.
 
-Note that this program currently does *not* have any retry/re-transmit
-capabilities and thus may not accomodate very low quality networks.
+Note that this program currently does *not* support the timeout
+interval option from RFC2349.
 """
 
 import errno
@@ -129,7 +129,12 @@ class TFTPClient:
 
         while True:
             print
-            command = raw_input('tftp> ')
+            try:
+                command = raw_input('tftp> ')
+            except EOFError:
+                print
+                break
+
             if not command:
                 continue
 
@@ -201,13 +206,20 @@ class TFTPClient:
         # Reset the error flag
         self.error = False
 
+        # UDP recv size is _UDP_TRANSFER_SIZE or more if required by
+        # the used block size.
+        recvsize = _UDP_TRANSFER_SIZE
+        if self.opts[proto.TFTP_OPTION_BLKSIZE] > recvsize:
+            recvsize = self.opts[proto.TFTP_OPTION_BLKSIZE] + 4
+
+
         # Process incoming packet until the state is cleared by the
         # end of a succesfull transmission or an error
         while not self.PTFTP_STATE.done and not self.error:
             try:
-                request = self.sock.recv(_UDP_TRANSFER_SIZE)
+                request = self.sock.recv(recvsize)
                 if not len(request):
-                    request = self.sock.recv(_UDP_TRANSFER_SIZE)
+                    request = self.sock.recv(recvsize)
 
                 if not len(request):
                     self.error = (True, 'Communication error.')
@@ -216,6 +228,7 @@ class TFTPClient:
                 self.error = (True, 'Connection timed out.')
                 return
 
+            # Reset the response packet
             response = None
 
             # Get the packet opcode and dispatch
@@ -230,12 +243,15 @@ class TFTPClient:
             else:
                 try:
                     handler = getattr(self, "serve%s" % proto.TFTP_OPS[opcode])
-                    response = handler(opcode, request[2:])
                 except AttributeError:
                     self.error = (True, 'Operation not supported.')
                     response = proto.TFTPHelper.createERROR(proto.ERROR_UNDEF,
                                                             'Operation not supported.')
 
+                if not response:
+                    response = handler(opcode, request[2:])
+
+            # Finally, send the response if we have one
             if response:
                 self.sock.sendto(response, self.peer)
 
@@ -260,15 +276,21 @@ class TFTPClient:
         if not self.PTFTP_STATE:
             return proto.TFTPHelper.createERROR(proto.ERROR_UNKNOWN_ID)
 
-        if self.PTFTP_STATE.state == state.STATE_SEND:
-            # Analyze received options
+        # Analyze received options
+        opts = proto.TFTPHelper.parse_options(opts)
+        if opts:
+            # HOOK: this is where we should check that we accept the
+            # options provided by the server (tsize/timeout/...).
 
-            pass
+            self.PTFTP_STATE.set_opts(opts)
         else:
+            self.error = (True, 'Transfer options parsing failed.')
+            self.PTFTP_STATE.state = state.STATE_ERROR
+            self.PTFTP_STATE.error = proto.ERROR_OPTION_NEGOCIATION
+
+        if self.PTFTP_STATE.state == state.STATE_RECV:
             self.PTFTP_STATE.state = state.STATE_RECV_OACK
 
-        # Add options to the transfer state
-        self.PTFTP_STATE.parse_options(opts)
         return self.PTFTP_STATE.next()
 
     def serveACK(self, op, request):
@@ -294,7 +316,7 @@ class TFTPClient:
 
         if self.PTFTP_STATE.state == state.STATE_SEND:
             if self.PTFTP_STATE.packetnum != num:
-                print 'Got ACK with incoherent data packet number. Aborting transfer.'
+                self.error = (True, 'Got ACK with incoherent data packet number.')
                 self.PTFTP_STATE.state = state.STATE_ERROR
                 self.PTFTP_STATE.error = proto.ERROR_ILLEGAL_OP
 
@@ -335,6 +357,7 @@ class TFTPClient:
 
         if self.PTFTP_STATE.state == state.STATE_RECV:
             if num != self.PTFTP_STATE.packetnum:
+                self.error = (True, 'Got DATA with incoherent packet number.')
                 self.PTFTP_STATE.state = state.STATE_ERROR
                 self.PTFTP_STATE.error = proto.ERROR_ILLEGAL_OP
             else:
@@ -419,7 +442,15 @@ class TFTPClient:
             print "Can't write to local file %s!" % filename
             return False
 
-        packet = proto.TFTPHelper.createRRQ(filepath, self.transfer_mode, self.opts)
+        opts = dict(self.opts)
+
+        # When not running in RFC1350 compliance mode, append tsize: 0
+        # to the list of options in the request to get the requested
+        # file size back in the OACK.
+        if not self.rfc1350:
+            opts[proto.TFTP_OPTION_TSIZE] = 0
+
+        packet = proto.TFTPHelper.createRRQ(filepath, self.transfer_mode, opts)
 
         self.sock.sendto(packet, self.peer)
         self.handle()
@@ -464,7 +495,15 @@ class TFTPClient:
             print "Can't read from local file %s!" % filepath
             return False
 
-        packet = proto.TFTPHelper.createWRQ(filename, self.transfer_mode, self.opts)
+        opts = dict(self.opts)
+
+        # When not running in RFC1350 compliance mode, append the
+        # tsize option to the request options to specify the
+        # transfered file size to the server.
+        if not self.rfc1350:
+            opts[proto.TFTP_OPTION_TSIZE] = self.PTFTP_STATE.filesize
+
+        packet = proto.TFTPHelper.createWRQ(filename, self.transfer_mode, opts)
 
         self.sock.sendto(packet, self.peer)
         self.handle()
