@@ -36,6 +36,7 @@ import threading
 class DHCPThread(threading.Thread):
     def __init__(self, iface, bootfile, router):
         threading.Thread.__init__(self)
+        self.setDaemon(True)
         self.server = dhcpd.DHCPServer(iface, bootfile, router=router)
 
     def run(self):
@@ -60,17 +61,17 @@ def main():
 
     iface, root, bootfile = args
 
-    if not ptftpd.checkBasePath(root):
-        sys.exit(1)
-
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)
-        dhcp.start()
+        tftp = ptftpd.TFTPServer(root, strict_rfc1350=options.strict_rfc1350)
+    except ptftpd.TFTPServerConfigurationError, e:
+        print 'TFTP server configuration error: %s' % e.message
 
-        ptftpd.run_server(root, 69, options.strict_rfc1350)
-    except KeyboardInterrupt:
-        print 'Got ^C, exiting'
-        sys.exit(0)
+    dhcp.start()
+    tftp.serve_forever()
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

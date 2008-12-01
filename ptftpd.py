@@ -32,7 +32,7 @@ interval option from RFC2349.
 from datetime import datetime
 from datetime import timedelta
 import errno
-import getopt
+import optparse
 import os
 import SocketServer
 import stat
@@ -45,15 +45,11 @@ import proto
 import state
 
 _PTFTPD_SERVER_NAME = 'pFTPd'
-_PTFTPD_DEFAULT_PORT = 6969
+_PTFTPD_DEFAULT_PORT = 69
 _PTFTPD_DEFAULT_PATH = '/tftpboot'
 
-# The global state registry
-PTFTPD_STATE = {}
-
-_port = _PTFTPD_DEFAULT_PORT
-_path = _PTFTPD_DEFAULT_PATH
-_rfc1350 = False
+class TFTPServerConfigurationError(Exception):
+    """The configuration of the pTFTPd is incorrect."""
 
 class TFTPServerHandler(SocketServer.DatagramRequestHandler):
     """
@@ -110,11 +106,10 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malformed RRQ requests
             return None
 
-        path = os.path.join(_path, filename)
+        path = os.path.join(self.server.root, filename)
         peer_state = state.TFTPState(self.client_address, op, path, mode)
 
         try:
-            print path
             peer_state.file = open(path)
             peer_state.filesize = os.stat(path)[stat.ST_SIZE]
             peer_state.packetnum = 0
@@ -122,7 +117,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
             # Only set options if not running in RFC1350 compliance mode
             # and when option were received.
-            if not _rfc1350 and len(opts):
+            if not self.server.strict_rfc1350 and len(opts):
                 opts = proto.TFTPHelper.parse_options(opts)
                 if opts:
                     # HOOK: this is where we should check that we accept
@@ -146,7 +141,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                 peer_state.error = proto.ERROR_UNDEF
 
 
-        PTFTPD_STATE[self.client_address] = peer_state
+        self.server.clients[self.client_address] = peer_state
         return peer_state.next()
 
     def serveWRQ(self, op, request):
@@ -167,7 +162,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malfored WRQ requests
             return None
 
-        path = os.path.join(_path, filename)
+        path = os.path.join(self.server.root, filename)
         peer_state = state.TFTPState(self.client_address, op, path, mode)
 
         try:
@@ -178,7 +173,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             peer_state.error = proto.ERROR_FILE_ALREADY_EXISTS
 
             # Only set options if not running in RFC1350 compliance mode
-            if not _rfc1350 and len(opts):
+            if not self.server.strict_rfc1350 and len(opts):
                 opts = proto.TFTPHelper.parse_options(opts)
                 if opts:
                     # HOOK: this is where we should check that we accept
@@ -206,7 +201,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
 
-        PTFTPD_STATE[self.client_address] = peer_state
+        self.server.clients[self.client_address] = peer_state
         return peer_state.next()
 
     def serveACK(self, op, request):
@@ -228,7 +223,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         try:
-            peer_state = PTFTPD_STATE[self.client_address]
+            peer_state = self.server.clients[self.client_address]
         except KeyError:
             return proto.TFTPHelper.createERROR(proto.ERROR_UNKNOWN_ID)
 
@@ -260,14 +255,14 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         elif peer_state.state == state.STATE_SEND_LAST:
             print "  >  DATA: %d data packet(s) sent." % peer_state.packetnum
             print "  <   ACK: Transfer complete, %d byte(s)." % peer_state.filesize
-            del PTFTPD_STATE[self.client_address]
+            del self.server.clients[self.client_address]
             return None
 
         print 'ERROR: Unexpected ACK!'
 
         if peer_state.op == proto.OP_WRQ:
             peer_state.purge()
-        del PTFTPD_STATE[self.client_address]
+        del self.server.clients[self.client_address]
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
     def serveDATA(self, op, request):
@@ -289,7 +284,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         try:
-            peer_state = PTFTPD_STATE[self.client_address]
+            peer_state = self.server.clients[self.client_address]
         except KeyError:
             return proto.TFTPHelper.createERROR(proto.ERROR_UNKNOWN_ID)
 
@@ -308,7 +303,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             if peer_state.done:
                 print "  <  DATA: %d packet(s) recevied." % peer_state.packetnum
                 print "  >   ACK: Transfer complete, %d byte(s)." % peer_state.filesize
-                del PTFTPD_STATE[self.client_address]
+                del self.server.clients[self.client_address]
 
             return next
 
@@ -316,7 +311,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         if peer_state.op == proto.OP_WRQ:
             peer_state.purge()
-        del PTFTPD_STATE[self.client_address]
+        del self.server.clients[self.client_address]
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
     def serveERROR(self, op, request):
@@ -338,115 +333,91 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         # An error packet immediately terminates a connection
-        if PTFTPD_STATE.has_key(self.client_address):
-            peer_state = PTFTPD_STATE[self.client_address]
+        if self.server.clients.has_key(self.client_address):
+            peer_state = self.server.clients[self.client_address]
 
             if peer_state.op == proto.OP_WRQ:
                 peer_state.purge()
-            del PTFTPD_STATE[self.client_address]
+            del self.server.clients[self.client_address]
 
         return None
 
 
-class TFTPServerTimeouter(threading.Thread):
+class TFTPServerGarbageCollector(threading.Thread):
     """
-    A timeouter thread to cleanup the server's state of timeouted
-    clients.
+    A gc thread to clean up the server's state of timed out clients.
     """
 
-    def __init__(self):
+    def __init__(self, clients):
         threading.Thread.__init__(self)
+        self.clients = clients
         self.setDaemon(True)
-        self.start()
 
     def run(self):
         while True:
+            # Sleep a little before doing a cycle.
+            time.sleep(10)
+
             toremove = []
 
-            for peer, peer_state in PTFTPD_STATE.iteritems():
+            for peer, peer_state in self.clients.iteritems():
                 delta = datetime.today() - peer_state.last_seen
                 if delta > timedelta(seconds=state.STATE_TIMEOUT_SECS):
-                    print "  #  T-OUT: peer %s:%d timeouted." % peer
+                    print "  #  T-OUT: peer %s:%d timed out." % peer
                     toremove.append(peer)
 
             for peer in toremove:
-                if PTFTPD_STATE[peer].op == proto.OP_WRQ:
-                    PTFTPD_STATE[peer].purge()
-                del PTFTPD_STATE[peer]
-
-            # Go to sleep
-            time.sleep(10)
+                if self.clients[peer].op == proto.OP_WRQ:
+                    self.clients[peer].purge()
+                del self.clients[peer]
 
 
-def checkBasePath(path):
+class TFTPServer(object):
+    def __init__(self, root, port=_PTFTPD_DEFAULT_PORT, strict_rfc1350=False):
+        self.root, self.port, self.strict_rfc1350 = root, port, strict_rfc1350
+        self.client_registry = {}
+
+        if not os.path.isdir(self.root):
+            raise TFTPServerConfigurationError(
+                "The specified TFTP root does not exist")
+
+        self.server = SocketServer.UDPServer(('', port), TFTPServerHandler)
+        self.server.root = self.root
+        self.server.strict_rfc1350 = self.strict_rfc1350
+        self.server.clients = self.client_registry
+        self.cleanup_thread = TFTPServerGarbageCollector(self.client_registry)
+
+    def serve_forever(self):
+        self.cleanup_thread.start()
+        self.server.serve_forever()
+
+
+def main():
+    usage = "Usage: %prog [options] <TFTP root>"
+    parser = optparse.OptionParser(usage=usage)
+    parser.add_option("-r", "--rfc1350", dest="strict_rfc1350",
+                      action="store_true", default=False,
+                      help="Run in strict RFC1350 compliance mode, "
+                      "with no extensions")
+    parser.add_option("-p", "--port", dest="port", action="store", type="int",
+                      default=_PTFTPD_DEFAULT_PORT, metavar="PORT",
+                      help="Listen for TFTP requests on PORT")
+
+    (options, args) = parser.parse_args()
+    if len(args) != 1:
+        parser.print_usage()
+        sys.exit(1)
+
+    root = args[0]
+
     try:
-        mode = os.stat(path)[stat.ST_MODE]
-        if stat.S_ISDIR(mode):
-            return True
-    except OSError:
-        print "Path %s not found or unavailable." % path
-
-    return False
-
-def usage():
-    print "usage: %s [options]" % sys.argv[0]
-    print
-    print "  -h    --help      Get help"
-    print "  -p    --port      Set TFTP listen port (default: %d)" % _PTFTPD_DEFAULT_PORT
-    print "  -b    --basepath  Set TFTP root path (default: %s)" % _PTFTPD_DEFAULT_PATH
-    print
-    print "To disable the use of TFTP extensions:"
-    print "  -r    --rfc1350   Strictly comply to the RFC1350 only (no extensions)"
-    print
-
-def run_server(path, port, strict_rfc1350):
-    global _path, _port, _rfc1350
-    _path, _port, _rfc1350 = path, port, strict_rfc1350
-    server = SocketServer.UDPServer(('', _port), TFTPServerHandler)
-
-    # Override the UDP read packet size to accomodate TFTP block sizes
-    # larger than 8192.
-    server.max_packet_size = proto.TFTP_BLKSIZE_MAX + 4
-
-    # Increase TFTP protocol packet creation/parsing verbosity.
-    proto.verbose = 0
-
-    timeouter = TFTPServerTimeouter()
-
-    if _rfc1350:
-        print 'Running in RFC1350 compliance mode.'
-    print ("%s serving %s on port %d..." %
-           (_PTFTPD_SERVER_NAME, _path, _port))
-
-    server.serve_forever()
+        server = TFTPServer(root, options.port, options.strict_rfc1350)
+        server.serve_forever();
+    except TFTPServerConfigurationError, e:
+        print 'TFTP server configuration error: %s' % e.message
 
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:], '?p:b:r',
-                                   ['help', 'port=', 'basepath=', 'rfc1350'])
-    except getopt.GetoptError:
-        # Print usage and exit
-        usage()
-        sys.exit(1)
-
-    for opt, val in opts:
-        if opt in ('-?', '--help'):
-            usage()
-            sys.exit(0)
-        if opt in ('-p', '--port'):
-            try:
-                _port = int(val)
-            except ValueError:
-                print 'Port must be a number!'
-                sys.exit(2)
-        if opt in ('-b', '--basepath'):
-            _path = val
-        if opt in ('-r', '--rfc1350'):
-            _rfc1350 = True
-
-    if checkBasePath(_path):
-        try:
-            run_server(_path, _port, _rfc1350)
-        except KeyboardInterrupt:
-            print 'Got ^C. Exiting'
-            sys.exit(0)
+        main()
+    except KeyboardInterrupt:
+        pass
