@@ -27,9 +27,11 @@ attempting to PXE boot. Use in conjunction with ptftpd.py to have a
 full, yet lightweight PXE boot setup.
 """
 
+import random
 import socket
 import struct
 import sys
+import time
 
 # The IP protocol number in Ethernet frames.
 ETHERNET_IP_PROTO = 0x800
@@ -49,6 +51,7 @@ DHCP_OP_DHCPACK = 5
 # DHCP options we care about.
 DHCP_OPTION_SUBNET = 1                # Subnet mask
 DHCP_OPTION_ROUTER = 3                # Router
+DHCP_OPTION_REQUESTED_IP = 50         # Requested IP address
 DHCP_OPTION_LEASE_TIME = 51           # Lease time for the IP address
 DHCP_OPTION_OP = 53                   # The DHCP operation (see above)
 DHCP_OPTION_SERVER_ID = 54            # Server Identifier (IP address)
@@ -58,6 +61,11 @@ DHCP_OPTION_PXE_REQ = 55              # The most basic PXE option. We
 DHCP_OPTION_CLIENT_UUID = 61          # The client machine UUID
 DHCP_OPTION_PXE_VENDOR = 43           # PXE vendor extensions
 DHCP_OPTION_CLIENT_UUID2 = 97         # The client machine UUID
+
+# DHCP lease timeout in seconds. Internally, we wait longer, to let
+# the client wrap up cleanly.
+DHCP_LEASE_TIMEOUT = 10*60            # 10 minutes
+DHCP_LEASE_TIMEOUT_INTERNAL = 15*60   # 15 minutes
 
 # Linux ioctl() commands to query the kernel.
 SIOCGIFADDR = 0x8915                  # IP address for interface
@@ -100,8 +108,11 @@ def _dhcp_options(options):
 
 def _pack_ip(ip_addr):
     """Pack a dotted quad IP string into a 4 byte string."""
-    fields = [int(x) for x in ip_addr.split('.')]
-    return struct.pack('!4B', *fields)
+    return socket.inet_aton(ip_addr)
+
+def _unpack_ip(ip_addr):
+    """Unpack a 4 byte IP address into a dotted quad string."""
+    return socket.inet_ntoa(ip_addr)
 
 def _pack_mac(mac_addr):
     """Pack a MAC address (00:00:00:00:00:00) into a 6 byte string."""
@@ -162,6 +173,8 @@ class DhcpPacket(object):
     def _parse_dhcp_options(self, options):
         self.unknown_options = []
         self.is_pxe_request = False
+        self.requested_ip = None
+
         for option, value in _dhcp_options(options):
             if option == DHCP_OPTION_OP:
                 self.op = ord(value)
@@ -173,6 +186,8 @@ class DhcpPacket(object):
                 self.uuid = _unpack_uuid(value[1:])
             elif option == DHCP_OPTION_PXE_REQ:
                 self.is_pxe_request = True
+            elif option == DHCP_OPTION_REQUESTED_IP:
+                self.requested_ip = _unpack_ip(value)
             else:
                 # Keep them around, in case other code feels like
                 # being knowledgeable.
@@ -185,6 +200,7 @@ class DHCPServer(object):
         self.bootfile = bootfile
         self.router = router or self.ip
         self.tftp_server = tftp_server or self.ip
+        self.ips_allocated = {}
 
         self.sock = socket.socket(socket.PF_PACKET, socket.SOCK_RAW)
         self.sock.bind((self.interface, ETHERNET_IP_PROTO))
@@ -194,17 +210,40 @@ class DHCPServer(object):
             data = self.sock.recv(4096)
             try:
                 pkt = DhcpPacket(data)
-
-                if pkt.is_pxe_request:
-                    if pkt.op == DHCP_OP_DHCPDISCOVER:
-                        print 'Offering to PXE boot client with UUID %s' % pkt.uuid
-                    elif pkt.op == DHCP_OP_DHCPREQUEST:
-                        print 'PXE booting client with UUID %s' % pkt.uuid
-
-                    self.sock.send(self.encode_dhcp_reply(pkt, '192.168.33.2'))
-
+                self.handle_dhcp_request(pkt)
             except (NotDhcpPacketError, UninterestingDhcpPacket):
                 continue;
+
+    def handle_dhcp_request(self, pkt):
+        if not pkt.is_pxe_request:
+            print 'Ignoring non-PXE DHCP request'
+            return
+
+        # Clean up old leases before trying to get one for our new
+        # client.
+        self.gc_allocated_ips()
+
+        if pkt.op == DHCP_OP_DHCPDISCOVER:
+            ip = self.generate_free_ip()
+            print 'Offering to PXE boot client %s with %s' % (pkt.uuid, ip)
+        elif pkt.op == DHCP_OP_DHCPREQUEST:
+            timeout = time.time() + DHCP_LEASE_TIMEOUT_INTERNAL
+            if (pkt.requested_ip and
+                pkt.requested_ip not in self.ips_allocated):
+                self.ips_allocated[pkt.requested_ip] = timeout
+                ip = pkt.requested_ip
+            else:
+                ip = self.generate_free_ip()
+                self.ips_allocated[ip] = timeout
+            print 'PXE booting client %s with %s' % (pkt.uuid, ip)
+
+        self.sock.send(self.encode_dhcp_reply(pkt, ip))
+
+    def gc_allocated_ips(self):
+        current = time.time()
+        old = [ip for ip,to in self.ips_allocated.iteritems() if to <= current]
+        for ip in old:
+            del self.ips_allocated[ip]
 
     def encode_dhcp_reply(self, request_pkt, client_ip):
         # Basic DHCP reply
@@ -230,7 +269,7 @@ class DHCPServer(object):
             }[request_pkt.op]
         dhcp_options = (
             (DHCP_OPTION_OP, chr(reply_kind)),
-            (DHCP_OPTION_LEASE_TIME, struct.pack('!L', 600)),
+            (DHCP_OPTION_LEASE_TIME, struct.pack('!L', DHCP_LEASE_TIMEOUT)),
             (DHCP_OPTION_SUBNET, _pack_ip(self.netmask)),
             (DHCP_OPTION_ROUTER, _pack_ip(self.router)),
             (DHCP_OPTION_SERVER_ID, _pack_ip(self.ip)),
@@ -267,6 +306,30 @@ class DHCPServer(object):
 
         # Bingo, one DHCP reply russian doll^W^Wpacket!
         return reply
+
+    def generate_free_ip(self):
+        server_ip = struct.unpack('!L', _pack_ip(self.ip))[0]
+        netmask = struct.unpack('!L', _pack_ip(self.netmask))[0]
+        anti_netmask = 0xFFFFFFFF - netmask
+
+        while True:
+            entropy = random.getrandbits(32)
+
+            client_ip = (server_ip & netmask) | (entropy & anti_netmask)
+
+            # Exclude using the server's address, the network's
+            # address, the broadcast address, and any IP already in
+            # use.
+            if (client_ip == server_ip or
+                (client_ip & netmask) == 0 or
+                (client_ip | netmask) == 0xFFFFFFFF):
+                continue
+
+            ip = _unpack_ip(struct.pack('!L', client_ip))
+            if ip in self.ips_allocated:
+                continue
+
+            return ip
 
 def main():
     import optparse
