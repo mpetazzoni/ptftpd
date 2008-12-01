@@ -32,6 +32,7 @@ import dhcpd
 import optparse
 import sys
 import threading
+import logging
 
 class DHCPThread(threading.Thread):
     def __init__(self, iface, bootfile, router):
@@ -52,6 +53,11 @@ def main():
     parser.add_option("-g", "--gateway", dest="router", default=None,
                       help="The IP address of the default gateway "
                       "(by default, the IP of the PXE server)")
+    parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
+                      const=logging.INFO, help="Output information messages",
+                      default=logging.WARNING)
+    parser.add_option("-D", "--debug", dest="loglevel", action="store_const",
+                      const=logging.DEBUG, help="Output debugging information")
 
     (options, args) = parser.parse_args()
     if len(args) != 3:
@@ -60,6 +66,9 @@ def main():
         sys.exit(1)
 
     iface, root, bootfile = args
+
+    logging.basicConfig(stream=sys.stdout, level=options.loglevel,
+                        format='%(levelname)s(%(name)s): %(message)s')
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)

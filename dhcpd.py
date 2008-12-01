@@ -32,6 +32,8 @@ import socket
 import struct
 import sys
 import time
+import logging
+l = logging.getLogger('dhcpd')
 
 # The IP protocol number in Ethernet frames.
 ETHERNET_IP_PROTO = 0x800
@@ -206,6 +208,7 @@ class DHCPServer(object):
         self.sock.bind((self.interface, ETHERNET_IP_PROTO))
 
     def serve_forever(self):
+        l.info('Serving PXE DHCP requests on %s' % self.interface)
         while True:
             data = self.sock.recv(4096)
             try:
@@ -216,7 +219,7 @@ class DHCPServer(object):
 
     def handle_dhcp_request(self, pkt):
         if not pkt.is_pxe_request:
-            print 'Ignoring non-PXE DHCP request'
+            l.info('Ignoring non-PXE DHCP request')
             return
 
         # Clean up old leases before trying to get one for our new
@@ -225,7 +228,7 @@ class DHCPServer(object):
 
         if pkt.op == DHCP_OP_DHCPDISCOVER:
             ip = self.generate_free_ip()
-            print 'Offering to PXE boot client %s with %s' % (pkt.uuid, ip)
+            l.info('Offering to PXE boot client %s with %s' % (pkt.uuid, ip))
         elif pkt.op == DHCP_OP_DHCPREQUEST:
             timeout = time.time() + DHCP_LEASE_TIMEOUT_INTERNAL
             if (pkt.requested_ip and
@@ -235,7 +238,7 @@ class DHCPServer(object):
             else:
                 ip = self.generate_free_ip()
                 self.ips_allocated[ip] = timeout
-            print 'PXE booting client %s with %s' % (pkt.uuid, ip)
+            l.info('PXE booting client %s with %s' % (pkt.uuid, ip))
 
         self.sock.send(self.encode_dhcp_reply(pkt, ip))
 
@@ -243,6 +246,7 @@ class DHCPServer(object):
         current = time.time()
         old = [ip for ip,to in self.ips_allocated.iteritems() if to <= current]
         for ip in old:
+            l.info('Lease on %s expired' % ip)
             del self.ips_allocated[ip]
 
     def encode_dhcp_reply(self, request_pkt, client_ip):
@@ -341,12 +345,18 @@ def main():
     options.add_option("-g", "--gateway", dest="router",
                        help="The IP address of the default gateway, if not "
                        "this machine", default=None)
+    options.add_option("-v", "--verbose", dest="loglevel", action="store_const",
+                       const=logging.INFO, help="Output information messages",
+                       default=logging.WARNING)
 
     (options, args) = options.parse_args()
 
     if len(args) != 2:
         print "Usage: %s <interface> <PXE boot file>" % sys.argv[0]
         sys.exit(1)
+
+    logging.basicConfig(stream=sys.stdout, level=options.loglevel,
+                        format='%(levelname)s(%(name)s): %(message)s')
 
     server = DHCPServer(args[0], args[1], router=options.router,
                         tftp_server=options.tftp_server)
