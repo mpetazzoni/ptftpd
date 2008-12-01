@@ -114,6 +114,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         peer_state = state.TFTPState(self.client_address, op, path, mode)
 
         try:
+            print path
             peer_state.file = open(path)
             peer_state.filesize = os.stat(path)[stat.ST_SIZE]
             peer_state.packetnum = 0
@@ -398,6 +399,27 @@ def usage():
     print "  -r    --rfc1350   Strictly comply to the RFC1350 only (no extensions)"
     print
 
+def run_server(path, port, strict_rfc1350):
+    global _path, _port, _rfc1350
+    _path, _port, _rfc1350 = path, port, strict_rfc1350
+    server = SocketServer.UDPServer(('', _port), TFTPServerHandler)
+
+    # Override the UDP read packet size to accomodate TFTP block sizes
+    # larger than 8192.
+    server.max_packet_size = proto.TFTP_BLKSIZE_MAX + 4
+
+    # Increase TFTP protocol packet creation/parsing verbosity.
+    proto.verbose = 0
+
+    timeouter = TFTPServerTimeouter()
+
+    if _rfc1350:
+        print 'Running in RFC1350 compliance mode.'
+    print ("%s serving %s on port %d..." %
+           (_PTFTPD_SERVER_NAME, _path, _port))
+
+    server.serve_forever()
+
 if __name__ == '__main__':
     try:
         opts, args = getopt.getopt(sys.argv[1:], '?p:b:r',
@@ -424,24 +446,7 @@ if __name__ == '__main__':
 
     if checkBasePath(_path):
         try:
-            server = SocketServer.UDPServer(('', _port), TFTPServerHandler)
-
-            # Override the UDP read packet size to accomodate TFTP
-            # block sizes larger than 8192.
-            server.max_packet_size = proto.TFTP_BLKSIZE_MAX + 4
-
-            # Increase TFTP protocol packet creation/parsing
-            # verbosity.
-            proto.verbose = 1
-
-            timeouter = TFTPServerTimeouter()
-
-            if _rfc1350:
-                print 'Running in RFC1350 compliance mode.'
-            print ("%s serving %s on port %d..." %
-                   (_PTFTPD_SERVER_NAME, _path, _port))
-
-            server.serve_forever()
+            run_server(_path, _port, _rfc1350)
         except KeyboardInterrupt:
             print 'Got ^C. Exiting'
             sys.exit(0)
