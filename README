@@ -1,24 +1,48 @@
-pTFTPd - A Python TFTP server
+pTFTPd - Python TFTP utilities
+------------------------------
 
-pTFTPd is a simple TFTP daemon written in Python. It fully supports
-the TFTP specification as defined in RFC1350. It also supports the
-TFTP Option Extension protocol (per RFC2347), the block size option as
-defined in RFC2348 and the transfer size option from RFC2349.
+pTFTPd is a collection of tools related to TFTP. It includes a TFTP server, a
+TFTP client, and a complete PXE solution based on this TFTP server and a
+micro-DHCP/BOOTP server. All these are written in Python and designed to be
+fast, RFC compliant and easy to use.
 
-Usage:
+The TFTP server, pTFTPd, fully supports the TFTP specification as defined in
+RFC1350. It also supports the TFTP Option Extension protocol (per RFC2347), the
+block size option as defined in RFC2348 and the transfer size option from
+RFC2349.
 
 For help on how to use pTFTPd, type:
 
-	./ptftpd.py --help
+  ./ptftpd.py --help
 
-By default, pTFTPd will listen on port 6969 and serve /tftpboot. Use
-the -p and -b options to change this :
+The port used can be changed using the -p option. The root path is given as a
+simple argument. For example, to serve /var/lib/tftp on port 6969:
 
-	./ptftpd.py -p 69 -b /var/lib/tftp/
+  ./ptftpd.py -p 6969 /var/lib/tftp
 
+The TFTP client is an interactive client, just launch it and type 'help' to see
+the available commands:
+
+  ./tftp.py
+  tftp> help
+  ...
+
+The PXE system is also very easy to use. It takes three arguments: the network
+interface to listen on, the TFTP root path from which to serve files, and the
+PXE boot filename. See --help for more details:
+
+  ./pxed.py --help
+
+All tools also understand the --rfc1350 option, which forces them in basic
+RFC1350 compliance mode, disabling all TFTP extensions for increased
+compatibility would you encouter any problem with your target system.
 
 Credits:
-
-pTFTPd is written by Maxime Petazzoni <maxime.petazzoni@bulix.org>
+^^^^^^^^
+The pTFTPd utilities are written by Maxime Petazzoni <maxime.petazzoni@bulix.org>
 and is released under the terms of the GNU General Public License. See
 COPYING for details.
+
+The micro-DHCP and PXE systems were contributed by David Anderson
+<dave@natulte.net>.
+

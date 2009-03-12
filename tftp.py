@@ -47,7 +47,7 @@ import state
 # UDP datagram size
 _UDP_TRANSFER_SIZE = 8192
 
-_PTFTP_DEFAULT_PORT = 6969
+_PTFTP_DEFAULT_PORT = 69
 _PTFTP_DEFAULT_HOST = 'localhost'
 _PTFTP_DEFAULT_MODE = 'octet'
 
