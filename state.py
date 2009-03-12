@@ -19,6 +19,7 @@
 # along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
+import errno
 import os
 import re
 import stat
@@ -207,9 +208,10 @@ class TFTPState:
             except IOError, e:
                 self.file.close()
                 if e.errno == errno.ENOSPC:
-                    return proto.TFTPHelper.createERROR(ERROR_DISK_FULL)
+                    return proto.TFTPHelper.createERROR(proto.ERROR_DISK_FULL)
                 else:
-                    return proto.TFTPHelper.createERROR(ERROR_UNDEF)
+                    print 'Undefined error occured: %s!' % errno.errorcode[e.errno]
+                    return proto.TFTPHelper.createERROR(proto.ERROR_UNDEF)
 
             if self.done:
                 self.file.close()

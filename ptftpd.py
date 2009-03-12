@@ -90,6 +90,10 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             self.wfile.write(response)
             self.wfile.flush()
 
+    def finish_state(self, peer_state):
+        self.server.clients[self.client_address] = peer_state
+        return peer_state.next()
+
     def serveRRQ(self, op, request):
         """
         Serves RRQ packets (GET requests).
@@ -108,8 +112,14 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malformed RRQ requests
             return None
 
-        path = os.path.join(self.server.root, filename)
+        path = os.path.abspath(os.path.join(self.server.root, filename))
         peer_state = state.TFTPState(self.client_address, op, path, mode)
+
+        if not path.startswith(self.server.root):
+            l.warning('Out-of-jail path requested: %s!' % path)
+            peer_state.state = state.STATE_ERROR
+            peer_state.error = proto.ERROR_ACCESS_VIOLATION
+            return self.finish_state(peer_state)
 
         try:
             peer_state.file = open(path)
@@ -147,9 +157,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                 l.error('Unknown error while accessing file %s' % filename)
                 peer_state.error = proto.ERROR_UNDEF
 
-
-        self.server.clients[self.client_address] = peer_state
-        return peer_state.next()
+        return self.finish_state(peer_state)
 
     def serveWRQ(self, op, request):
         """
@@ -169,8 +177,14 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malfored WRQ requests
             return None
 
-        path = os.path.join(self.server.root, filename)
+        path = os.path.abspath(os.path.join(self.server.root, filename))
         peer_state = state.TFTPState(self.client_address, op, path, mode)
+
+        if not path.startswith(self.server.root):
+            l.warning('Out-of-jail path requested: %s!' % path)
+            peer_state.state = state.STATE_ERROR
+            peer_state.error = proto.ERROR_ACCESS_VIOLATION
+            return self.finish_state(peer_state)
 
         try:
             # Try to open the file. If it succeeds, it means the file
@@ -178,20 +192,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             peer_state.file = open(path)
             peer_state.state = state.STATE_ERROR
             peer_state.error = proto.ERROR_FILE_ALREADY_EXISTS
-
-            # Only set options if not running in RFC1350 compliance mode
-            if not self.server.strict_rfc1350 and len(opts):
-                opts = proto.TFTPHelper.parse_options(opts)
-                if opts:
-                    # HOOK: this is where we should check that we accept
-                    # the options requested by the client.
-
-                    peer_state.packetnum = 1
-                    peer_state.state = state.STATE_SEND_OACK
-                    peer_state.set_opts(opts)
-                else:
-                    peer_state.state = state.STATE_ERROR
-                    peer_state.error = proto.ERROR_OPTION_NEGOCIATION
+            return self.finish_state(peer_state)
 
         except IOError, e:
             # Otherwise, if the open failed because the file did not
@@ -208,12 +209,26 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
 
-        self.server.clients[self.client_address] = peer_state
-        return peer_state.next()
+
+        # Only set options if not running in RFC1350 compliance mode
+        if not self.server.strict_rfc1350 and len(opts):
+            opts = proto.TFTPHelper.parse_options(opts)
+            if opts:
+                # HOOK: this is where we should check that we accept
+                # the options requested by the client.
+
+                peer_state.packetnum = 1
+                peer_state.state = state.STATE_SEND_OACK
+                peer_state.set_opts(opts)
+            else:
+                peer_state.state = state.STATE_ERROR
+                peer_state.error = proto.ERROR_OPTION_NEGOCIATION
+
+        return self.finish_state(peer_state)
 
     def serveACK(self, op, request):
         """
-		Serves ACK packets.
+        Serves ACK packets.
 
         Args:
           op (integer): the TFTP opcode.
@@ -426,7 +441,7 @@ def main():
         parser.print_usage()
         sys.exit(1)
 
-    root = args[0]
+    root = os.path.abspath(args[0])
 
     logging.basicConfig(stream=sys.stdout, level=options.loglevel,
                         format='%(levelname)s(%(name)s): %(message)s')
