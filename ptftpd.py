@@ -127,7 +127,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             peer_state.packetnum = 0
             peer_state.state = state.STATE_SEND
 
-            l.info('Serving file %s' % filename)
+            l.info('Serving file %s to %s' %
+		   (filename, self.client_address[0]))
 
             # Only set options if not running in RFC1350 compliance mode
             # and when option were received.
@@ -415,7 +416,8 @@ class TFTPServer(object):
         self.cleanup_thread = TFTPServerGarbageCollector(self.client_registry)
 
     def serve_forever(self):
-        l.info("Serving TFTP requests on port %d" % self.port)
+        l.info("Serving TFTP requests in %s on port %d" %
+               (self.root, self.port))
         self.cleanup_thread.start()
         self.server.serve_forever()
 
