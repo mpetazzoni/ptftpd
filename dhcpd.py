@@ -72,6 +72,7 @@ DHCP_LEASE_TIMEOUT_INTERNAL = 15*60   # 15 minutes
 # Linux ioctl() commands to query the kernel.
 SIOCGIFADDR = 0x8915                  # IP address for interface
 SIOCGIFNETMASK = 0x891B               # Netmask for interface
+SIOCGIFHWADDR = 0x8927                # Mac address for interface
 
 def get_ip_config_for_interface(iface):
     """Retrieve and return the IP address/netmask of the given interface."""
@@ -82,12 +83,17 @@ def get_ip_config_for_interface(iface):
     def ip_from_response(resp):
         return socket.inet_ntoa(resp[20:24])
 
+    def mac_from_response(resp):
+        mac = struct.unpack('!6B', resp[18:24])
+        return ':'.join(['%02x' % x for x in mac])
+
     import fcntl
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     ifname = struct.pack('256s', iface[:15])
     ip = fcntl.ioctl(s.fileno(), SIOCGIFADDR, ifname)
     mask = fcntl.ioctl(s.fileno(), SIOCGIFNETMASK, ifname)
-    return ip_from_response(ip), ip_from_response(mask)
+    mac = fcntl.ioctl(s.fileno(), SIOCGIFHWADDR, ifname)
+    return ip_from_response(ip), ip_from_response(mask), mac_from_response(mac)
 
 def _dhcp_options(options):
     """Generate a sequence of DHCP options from a raw byte stream."""
@@ -170,6 +176,8 @@ class DhcpPacket(object):
 
         self.xid = xid
 
+        self.uuid = 'not specified'
+
         self._parse_dhcp_options(pkt[dhcp_size:])
 
     def _parse_dhcp_options(self, options):
@@ -198,7 +206,7 @@ class DhcpPacket(object):
 class DHCPServer(object):
     def __init__(self, interface, bootfile, router=None, tftp_server=None):
         self.interface = interface
-        self.ip, self.netmask = get_ip_config_for_interface(interface)
+        self.ip, self.netmask, self.mac = get_ip_config_for_interface(interface)
         self.bootfile = bootfile
         self.router = router or self.ip
         self.tftp_server = tftp_server or self.ip
@@ -228,7 +236,7 @@ class DHCPServer(object):
 
         if pkt.op == DHCP_OP_DHCPDISCOVER:
             ip = self.generate_free_ip()
-            l.info('Offering to PXE boot client %s with %s' % (pkt.uuid, ip))
+            l.info('Offering to boot client %s (uuid : %s)' % (ip, pkt.uuid))
         elif pkt.op == DHCP_OP_DHCPREQUEST:
             timeout = time.time() + DHCP_LEASE_TIMEOUT_INTERNAL
             if (pkt.requested_ip and
@@ -238,7 +246,7 @@ class DHCPServer(object):
             else:
                 ip = self.generate_free_ip()
                 self.ips_allocated[ip] = timeout
-            l.info('PXE booting client %s with %s' % (pkt.uuid, ip))
+            l.info('PXE booting client %s (uuid : %s)' % (ip, pkt.uuid))
 
         self.sock.send(self.encode_dhcp_reply(pkt, ip))
 
@@ -252,7 +260,9 @@ class DHCPServer(object):
     def encode_dhcp_reply(self, request_pkt, client_ip):
         # Basic DHCP reply
         reply = struct.pack('!B'    # The op (0x2)
-                            '3x'    # The htype/hlen/hops fields
+                            'B'     # The htype (Ethernet -> 0x1)
+                            'B'     # The hlen (0x6)
+                            'x'     # The hops field, useless
                             'L'     # XID
                             '8x'    # Useless fields
                             '4s'    # Client IP address
@@ -262,9 +272,10 @@ class DHCPServer(object):
                             '74x'   # BOOTP legacy padding.
                             '128s'  # PXE boot file
                             'L'     # Magic cookie
-                            , 0x2, request_pkt.xid, _pack_ip(client_ip),
-                            _pack_ip(self.tftp_server), request_pkt.client_mac,
-                            self.bootfile, DHCP_MAGIC_COOKIE)
+                            , 0x2, 0x1, 0x6, request_pkt.xid, 
+                            _pack_ip(client_ip), _pack_ip(self.tftp_server),
+                            request_pkt.client_mac, self.bootfile,
+                            DHCP_MAGIC_COOKIE)
 
         # DHCP options relevant to PXE
         reply_kind = {
@@ -291,7 +302,8 @@ class DHCPServer(object):
 
         # Now the IP datagram...
         ip_header1 = struct.pack('!BxH4xBB', 0x45, 20+len(reply), 0xFF, IP_UDP_PROTO)
-        ip_header2 = struct.pack('4s4s', _pack_ip(self.ip), _pack_ip(client_ip))
+        ip_header2 = struct.pack('4s4s', _pack_ip(self.ip),
+                                _pack_ip('255.255.255.255'))
         # Header checksum computation
         checksum = 0
         for v in struct.unpack('!5H', ip_header1) + struct.unpack('!4H', ip_header2):
@@ -301,11 +313,9 @@ class DHCPServer(object):
         checksum = 0xFFFF - checksum
         reply = ip_header1 + struct.pack('!H', checksum) + ip_header2 + reply
 
-        # And finally the ethernet frame. Note that we don't send the
-        # actual server MAC, on the observation that the DHCP client
-        # doesn't give a damn anyway and still broadcasts offers.
-        reply = struct.pack('!6s6sH', request_pkt.client_mac,
-                            _pack_mac('ff:ff:ff:ff:ff:ff'),
+        # And finally the ethernet frame.
+        reply = struct.pack('!6s6sH', _pack_mac('ff:ff:ff:ff:ff:ff'),
+                            _pack_mac(self.mac),
                             ETHERNET_IP_PROTO) + reply
 
         # Bingo, one DHCP reply russian doll^W^Wpacket!
