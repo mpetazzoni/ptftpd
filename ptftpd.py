@@ -32,6 +32,7 @@ interval option from RFC2349.
 from datetime import datetime
 from datetime import timedelta
 import errno
+import logging
 import optparse
 import os
 import SocketServer
@@ -40,11 +41,12 @@ import struct
 import sys
 import threading
 import time
-import logging
-l = logging.getLogger('tftpd')
 
+import notify
 import proto
 import state
+
+l = notify.getLogger('tftpd')
 
 _PTFTPD_SERVER_NAME = 'pFTPd'
 _PTFTPD_DEFAULT_PORT = 69
@@ -112,23 +114,26 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malformed RRQ requests
             return None
 
-        path = os.path.abspath(os.path.join(self.server.root, filename))
-        peer_state = state.TFTPState(self.client_address, op, path, mode)
+        peer_state = state.TFTPState(self.client_address, op,
+                self.server.root, filename, mode)
 
-        if not path.startswith(self.server.root):
-            l.warning('Out-of-jail path requested: %s!' % path)
+        if not peer_state.filepath.startswith(self.server.root):
             peer_state.state = state.STATE_ERROR
             peer_state.error = proto.ERROR_ACCESS_VIOLATION
+
+            l.warning('Out-of-jail path requested: %s!' % filename,
+                    extra=peer_state.extra(notify.TRANSFER_FAILED))
             return self.finish_state(peer_state)
 
         try:
-            peer_state.file = open(path)
-            peer_state.filesize = os.stat(path)[stat.ST_SIZE]
+            peer_state.file = open(peer_state.filepath)
+            peer_state.filesize = os.stat(peer_state.filepath)[stat.ST_SIZE]
             peer_state.packetnum = 0
             peer_state.state = state.STATE_SEND
 
-            l.info('Serving file %s to %s' %
-		   (filename, self.client_address[0]))
+            l.info('Serving file %s to host %s...' %
+                    (filename, self.client_address[0]),
+                    extra=peer_state.extra(notify.TRANSFER_STARTED))
 
             # Only set options if not running in RFC1350 compliance mode
             # and when option were received.
@@ -149,14 +154,17 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             peer_state.state = state.STATE_ERROR
 
             if e.errno == errno.ENOENT:
-                l.warning('Client requested non-existent path %s' % filename)
                 peer_state.error = proto.ERROR_FILE_NOT_FOUND
+                l.warning('Client requested non-existent path %s' % filename,
+                          extra=peer_state.extra(notify.TRANSFER_FAILED))
             elif e.errno == errno.EACCES or e.errno == errno.EPERM:
-                l.error('Client requested inaccessible path %s' % filename)
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
+                l.error('Client requested inaccessible path %s' % filename,
+                        extra=peer_state.extra(notify.TRANSFER_FAILED))
             else:
-                l.error('Unknown error while accessing file %s' % filename)
                 peer_state.error = proto.ERROR_UNDEF
+                l.error('Unknown error while accessing file %s' % filename,
+                        extra=peer_state.extra(notify.TRANSFER_FAILED))
 
         return self.finish_state(peer_state)
 
@@ -178,21 +186,26 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malfored WRQ requests
             return None
 
-        path = os.path.abspath(os.path.join(self.server.root, filename))
-        peer_state = state.TFTPState(self.client_address, op, path, mode)
+        peer_state = state.TFTPState(self.client_address, op,
+                self.server.root, filename, mode)
 
-        if not path.startswith(self.server.root):
-            l.warning('Out-of-jail path requested: %s!' % path)
+        if not peer_state.filepath.startswith(self.server.root):
             peer_state.state = state.STATE_ERROR
             peer_state.error = proto.ERROR_ACCESS_VIOLATION
+
+            l.warning('Out-of-jail path requested: %s!' % filename,
+                      extra=peer_state.extra(notify.TRANSFER_FAILED))
             return self.finish_state(peer_state)
 
         try:
             # Try to open the file. If it succeeds, it means the file
             # already exists and report the error
-            peer_state.file = open(path)
+            peer_state.file = open(peer_state.filepath)
             peer_state.state = state.STATE_ERROR
             peer_state.error = proto.ERROR_FILE_ALREADY_EXISTS
+
+            l.warning('Client attempted to overwrite file %s!' % filename,
+                      extra=peer_state.extra(notify.TRANSFER_FAILED))
             return self.finish_state(peer_state)
 
         except IOError, e:
@@ -200,16 +213,21 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # exist, create it and go on
             if e.errno == errno.ENOENT:
                 try:
-                    peer_state.file = open(path, 'w')
+                    peer_state.file = open(peer_state.filepath, 'w')
                     peer_state.packetnum = 0
                     peer_state.state = state.STATE_RECV
+                    l.info('Upload of %s began.' % filename,
+                            extra=peer_state.extra(notify.TRANSFER_STARTED))
                 except IOError:
                     peer_state.state = state.STATE_ERROR
                     peer_state.error = proto.ERROR_ACCESS_VIOLATION
+                    l.warning('Error creating file %s for upload!' % filename,
+                              extra=peer_state.extra(notify.TRANSFER_FAILED))
             else:
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
-
+                l.warning('Error creating file %s for upload!' % filename,
+                          extra=peer_state.extra(notify.TRANSFER_FAILED))
 
         # Only set options if not running in RFC1350 compliance mode
         if not self.server.strict_rfc1350 and len(opts):
@@ -252,10 +270,11 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         if peer_state.state == state.STATE_SEND_OACK:
             if num != 0:
-                l.error('Client did not reply correctly to the OACK packet. '
-                        'Aborting transmission.')
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ILLEGAL_OP
+                l.error('Client did not reply correctly to the OACK packet. '
+                        'Aborting transmission.',
+                        extra=peer_state.extra(notify.TRANSFER_FAILED))
             else:
                 peer_state.state = state.STATE_SEND
 
@@ -263,10 +282,11 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         elif peer_state.state == state.STATE_SEND:
             if peer_state.packetnum != num:
-                l.error('Got ACK with incoherent data packet number. '
-                        'Aborting transfer.')
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ILLEGAL_OP
+                l.error('Got ACK with incoherent data packet number. '
+                        'Aborting transfer.',
+                        extra=peer_state.extra(notify.TRANSFER_FAILED))
 
             return peer_state.next()
 
@@ -274,17 +294,21 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return peer_state.next()
 
         elif peer_state.state == state.STATE_ERROR:
-            l.debug('Error ACKed. Terminating transfer.')
+            l.debug('Error ACKed. Terminating transfer.',
+                    extra=peer_state.extra(notify.TRANSFER_FAILED))
             return None
 
         elif peer_state.state == state.STATE_SEND_LAST:
             l.debug("  >  DATA: %d data packet(s) sent." % peer_state.packetnum)
             l.debug("  <   ACK: Transfer complete, %d byte(s)."
                     % peer_state.filesize)
+            l.info('Transfer of file %s completed.' % peer_state.filename,
+                    extra=peer_state.extra(notify.TRANSFER_COMPLETED))
             del self.server.clients[self.client_address]
             return None
 
-        l.error('Unexpected ACK!')
+        l.error('Unexpected ACK!',
+                extra=peer_state.extra(notify.TRANSFER_FAILED))
 
         if peer_state.op == proto.OP_WRQ:
             peer_state.purge()
@@ -315,6 +339,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return proto.TFTPHelper.createERROR(proto.ERROR_UNKNOWN_ID)
 
         if len(data) > peer_state.opts[proto.TFTP_OPTION_BLKSIZE]:
+            l.warning('Illegal TFTP option received.',
+                      extra=peer_state.extra(TRANSFER_FAILED))
             return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
         if peer_state.state == state.STATE_RECV:
@@ -331,11 +357,14 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                         % peer_state.packetnum)
                 l.debug("  >   ACK: Transfer complete, %d byte(s)."
                         % peer_state.filesize)
+                l.info('Transfer of file %s completed.' % peer_state.filename,
+                       extra=peer_state.extra(notify.TRANSFER_COMPLETED))
                 del self.server.clients[self.client_address]
 
             return next
 
-        l.error('Unexpected DATA!')
+        l.error('Unexpected DATA!',
+                extra=peer_state.extra(notify.TRANSFER_FAILED))
 
         if peer_state.op == proto.OP_WRQ:
             peer_state.purge()
@@ -364,6 +393,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         if self.server.clients.has_key(self.client_address):
             peer_state = self.server.clients[self.client_address]
 
+            l.warning('Error packet received!',
+                      extra=peer_state.extra(notify.TRANSFER_FAILED))
             if peer_state.op == proto.OP_WRQ:
                 peer_state.purge()
             del self.server.clients[self.client_address]
@@ -391,12 +422,15 @@ class TFTPServerGarbageCollector(threading.Thread):
             for peer, peer_state in self.clients.iteritems():
                 delta = datetime.today() - peer_state.last_seen
                 if delta > timedelta(seconds=state.STATE_TIMEOUT_SECS):
-                    l.debug("peer %s:%d timed out." % peer)
+                    if peer_state.state != state.STATE_ERROR:
+                        l.debug("Peer %s:%d timed out." % peer,
+                                extra=peer_state.extra(notify.TRANSFER_FAILED))
                     toremove.append(peer)
 
             for peer in toremove:
                 if self.clients[peer].op == proto.OP_WRQ:
                     self.clients[peer].purge()
+                l.debug('Removed stale peer %s:%d.' % peer)
                 del self.clients[peer]
 
 
@@ -445,8 +479,20 @@ def main():
 
     root = os.path.abspath(args[0])
 
-    logging.basicConfig(stream=sys.stdout, level=options.loglevel,
-                        format='%(levelname)s(%(name)s): %(message)s')
+    # Setup notification logging
+    notify.StreamEngine.install(l, stream=sys.stdout,
+        loglevel=options.loglevel,
+        format='%(levelname)s(%(name)s): %(message)s')
+    notify.DetailledStreamEngine.install(l, stream=sys.stdout,
+        format='%(levelname)s(%(name)s): Transfer of %(file)s to ' \
+               '%(host)s:%(port)d %(state)s.')
+
+    def temp(**kwargs):
+        print "From callback:", kwargs
+    notify.CallbackEngine.install(l, callbacks={
+        notify.TRANSFER_STARTED: temp,
+        notify.TRANSFER_COMPLETED: temp,
+        notify.TRANSFER_FAILED: temp})
 
     try:
         server = TFTPServer(root, options.port, options.strict_rfc1350)

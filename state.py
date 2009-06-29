@@ -43,23 +43,23 @@ class TFTPState:
     with a client.
     """
 
-    def __init__(self, peer, op, filepath, mode):
+    def __init__(self, peer, op, path, filename, mode):
         """
         Initializes a new TFTP state for the given peer.
 
         Args:
           peer (tuple): a tuple (ip, port) describing the peer.
           op (integer): the operation this state refers to.
-          filepath (string): the full path of the used file.
+          path (string): the server root path.
+          filename (string): the relative path of the used file.
           mode (string): the transfer mode requested.
         Returns:
           A new, initialized TFTPState object with the options parsed.
         """
 
-        self.peer = peer
-        self.op = op
-        self.filepath = filepath
-        self.mode = mode
+        (self.peer, self.op, self.path, self.filename, self.mode) = \
+                (peer, op, path, filename, mode)
+        self.filepath = os.path.abspath(os.path.join(self.path, self.filename))
 
         self.file = None               # File object to read from or write to
         self.filesize = 0              # File size in bytes
@@ -75,6 +75,21 @@ class TFTPState:
         self.error = None              # TFTP error code to send (if state == error)
         self.data = None
         self.tosend = ""
+
+    def extra(self, state):
+        """Build an extra information dictionnary we can pass to logging
+        functions when necessary.
+        
+        Args:
+            state (notify state): a transfer state (see notify module).
+
+        Returns a dictionnary containing the host, port, file and state
+        mappings.
+        """
+        return {'host': self.peer[0],
+                'port': self.peer[1],
+                'file': self.filename,
+                'state': state}
 
     def __del__(self):
         if not self.file:
