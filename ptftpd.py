@@ -155,11 +155,11 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
             if e.errno == errno.ENOENT:
                 peer_state.error = proto.ERROR_FILE_NOT_FOUND
-                l.warning('Client requested non-existent path %s' % filename,
+                l.warning('Client requested non-existent file %s' % filename,
                           extra=peer_state.extra(notify.TRANSFER_FAILED))
             elif e.errno == errno.EACCES or e.errno == errno.EPERM:
                 peer_state.error = proto.ERROR_ACCESS_VIOLATION
-                l.error('Client requested inaccessible path %s' % filename,
+                l.error('Client requested inaccessible file %s' % filename,
                         extra=peer_state.extra(notify.TRANSFER_FAILED))
             else:
                 peer_state.error = proto.ERROR_UNDEF
