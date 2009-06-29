@@ -435,7 +435,8 @@ class TFTPServerGarbageCollector(threading.Thread):
 
 
 class TFTPServer(object):
-    def __init__(self, root, port=_PTFTPD_DEFAULT_PORT, strict_rfc1350=False):
+    def __init__(self, root, port=_PTFTPD_DEFAULT_PORT, strict_rfc1350=False,
+                 notification_callbacks={}):
         self.root, self.port, self.strict_rfc1350 = root, port, strict_rfc1350
         self.client_registry = {}
 
@@ -448,6 +449,9 @@ class TFTPServer(object):
         self.server.strict_rfc1350 = self.strict_rfc1350
         self.server.clients = self.client_registry
         self.cleanup_thread = TFTPServerGarbageCollector(self.client_registry)
+
+        # Add callback notifications
+        notify.CallbackEngine.install(l, notification_callbacks)
 
     def serve_forever(self):
         l.info("Serving TFTP requests in %s on port %d" %
@@ -489,13 +493,13 @@ def main():
 
     def temp(**kwargs):
         print "From callback:", kwargs
-    notify.CallbackEngine.install(l, callbacks={
-        notify.TRANSFER_STARTED: temp,
-        notify.TRANSFER_COMPLETED: temp,
-        notify.TRANSFER_FAILED: temp})
 
     try:
-        server = TFTPServer(root, options.port, options.strict_rfc1350)
+        server = TFTPServer(root, options.port, options.strict_rfc1350,
+                            notification_callbacks={
+                                notify.TRANSFER_STARTED: temp,
+                                notify.TRANSFER_COMPLETED: temp,
+                                notify.TRANSFER_FAILED: temp})
         server.serve_forever();
     except TFTPServerConfigurationError, e:
         print 'TFTP server configuration error: %s' % e.message
