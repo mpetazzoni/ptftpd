@@ -487,19 +487,9 @@ def main():
     notify.StreamEngine.install(l, stream=sys.stdout,
         loglevel=options.loglevel,
         format='%(levelname)s(%(name)s): %(message)s')
-    notify.DetailledStreamEngine.install(l, stream=sys.stdout,
-        format='%(levelname)s(%(name)s): Transfer of %(file)s to ' \
-               '%(host)s:%(port)d %(state)s.')
-
-    def temp(**kwargs):
-        print "From callback:", kwargs
 
     try:
-        server = TFTPServer(root, options.port, options.strict_rfc1350,
-                            notification_callbacks={
-                                notify.TRANSFER_STARTED: temp,
-                                notify.TRANSFER_COMPLETED: temp,
-                                notify.TRANSFER_FAILED: temp})
+        server = TFTPServer(root, options.port, options.strict_rfc1350)
         server.serve_forever();
     except TFTPServerConfigurationError, e:
         print 'TFTP server configuration error: %s' % e.message
