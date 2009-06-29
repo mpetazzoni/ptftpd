@@ -41,8 +41,11 @@ import stat
 import sys
 import time
 
+import notify
 import proto
 import state
+
+l = notify.getLogger('tftp')
 
 # UDP datagram size
 _UDP_TRANSFER_SIZE = 8192
@@ -66,16 +69,19 @@ class TFTPClient:
 
     PTFTP_STATE = None
 
-    def __init__(self, peer, opts=None, mode='octet', rfc1350=False):
+    def __init__(self, peer, opts=None, mode='octet', rfc1350=False,
+                 notification_callbacks={}):
         """
         Initializes the TFTP client.
 
         Args:
-          peer (tuple): a (host, port) tuple describing the server to connect to.
-          opts (dict): a dictionnary of TFTP option values to use,
-            or None to disable them (defaults to None).
-          mode (string): the transfer mode to use by default, must be one of
-            TFTP_MODES (defaults to octet).
+            peer (tuple): a (host, port) tuple describing the server to connect to.
+            opts (dict): a dictionnary of TFTP option values to use,
+                or None to disable them (defaults to None).
+            mode (string): the transfer mode to use by default, must be one of
+                TFTP_MODES (defaults to octet).
+            notification_callbacks (dict): a dictionary of notification
+                callbacks to use for the callback notification engine.
         """
 
         self.peer = peer
@@ -94,7 +100,11 @@ class TFTPClient:
 
             # This one is mandatory
             if not self.opts.has_key(proto.TFTP_OPTION_BLKSIZE):
-                self.opts[proto.TFTP_OPTION_BLKSIZE] = _PTFTP_DEFAULT_OPTS[proto.TFTP_OPTION_BLKSIZE]
+                self.opts[proto.TFTP_OPTION_BLKSIZE] = \
+                        _PTFTP_DEFAULT_OPTS[proto.TFTP_OPTION_BLKSIZE]
+
+        # Finally, install the provided callbacks
+        notify.CallbackEngine.install(l, notification_callbacks)
 
     def connect(self):
         """
@@ -418,8 +428,7 @@ class TFTPClient:
             if args[0] == '-f':
                 overwrite = True
 
-        filename = filepath.split('/')
-        filename = filename[len(filename)-1]
+        (_, filename) = os.path.split(filepath)
 
         # First, check we're not going to overwrite an existing file
         if not overwrite:
@@ -431,7 +440,8 @@ class TFTPClient:
             except IOError:
                 pass
 
-        self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_RRQ, filepath, self.transfer_mode)
+        self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_RRQ,
+                '', filepath, self.transfer_mode)
 
         # Then, before sending anything to the server, open the file
         # for writing
@@ -489,10 +499,10 @@ class TFTPClient:
             return
 
         filepath = args[0]
-        filename = filepath.split('/')
-        filename = filename[len(filename)-1]
+        filename = os.path.split(filepath)
 
-        self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_WRQ, filepath, self.transfer_mode)
+        self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_WRQ,
+                '', filepath, self.transfer_mode)
 
         try:
             self.PTFTP_STATE.file = open(filepath)
