@@ -1,0 +1,17 @@
+AUTHORS
+=======
+
+The pTFTPd tool suite is written and maintained by Maxime Petazzoni
+<maxime.petazzoni@bulix.org>. Other contributors include:
+
+  David Anderson      <dave@natulte.net>
+    DHCP and PXE servers.
+
+  Maxime Ripard       <macs@anandra.org>
+    BOOTPd, based on David Anderson's work on DHCPd.
+
+Thanks
+^^^^^^
+
+Thanks to David Anderson, Maxime Ripard, Thomas Petazzoni and Benjamin
+Collet for testing and using the pTFTPd utilities!

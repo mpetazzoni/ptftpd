@@ -1,48 +1,67 @@
-pTFTPd - Python TFTP utilities
-------------------------------
+pTFTPd - A pure-Python TFTP tool suite
+======================================
 
-pTFTPd is a collection of tools related to TFTP. It includes a TFTP server, a
-TFTP client, and a complete PXE solution based on this TFTP server and a
-micro-DHCP/BOOTP server. All these are written in Python and designed to be
-fast, RFC compliant and easy to use.
+pTFTPd is a collection of tools related to TFTP. It includes a TFTP
+server, a TFTP client, and a complete PXE solution based on this TFTP
+server and a micro-DHCP or BOOTP server. All these tools are written in
+Python and designed to be fast, RFC compliant and easy to use.
 
-The TFTP server, pTFTPd, fully supports the TFTP specification as defined in
-RFC1350. It also supports the TFTP Option Extension protocol (per RFC2347), the
-block size option as defined in RFC2348 and the transfer size option from
-RFC2349.
+Available tools include:
+
+  - bootpd.py : a BOOTP server (RFC951 and RFC1497 compliant)
+  - dhcpd.py  : a simple, stripped-down DHCP server.
+  - ptftpd.py : the TFTP server (RFC1350, 2347, 2348 and 2349 compliant)
+  - pxed.py   : a one-call PXE server using dhcpd and ptftpd.
+  - tftp.py   : a simple TFTP client (RFC1350, 2347, 2348 and 2349
+                compliant and capable)
+
+They all support the --help option to present the usage summary to the
+user.
+
+All tools also understand the --rfc1350 option, which forces them in
+basic TFTP RFC1350 compliance mode, disabling all TFTP extensions for
+increased compatibility would you encouter any problem with your target
+system.
+
+TFTP server and client
+^^^^^^^^^^^^^^^^^^^^^^
+
+The TFTP server, pTFTPd, fully supports the TFTP specification as
+defined in RFC1350. It also supports the TFTP Option Extension protocol
+(per RFC2347), the block size option as defined in RFC2348 and the
+transfer size option from RFC2349.
 
 For help on how to use pTFTPd, type:
 
   ./ptftpd.py --help
 
-The port used can be changed using the -p option. The root path is given as a
-simple argument. For example, to serve /var/lib/tftp on port 6969:
+The port used can be changed using the -p option. The root path is given
+as a simple argument. For example, to serve /var/lib/tftp on port 6969:
 
   ./ptftpd.py -p 6969 /var/lib/tftp
 
-The TFTP client is an interactive client, just launch it and type 'help' to see
-the available commands:
+The TFTP client is an interactive client, just launch it and type 'help'
+to see the available commands:
 
   ./tftp.py
   tftp> help
   ...
 
-The PXE system is also very easy to use. It takes three arguments: the network
-interface to listen on, the TFTP root path from which to serve files, and the
-PXE boot filename. See --help for more details:
+PXE solution
+^^^^^^^^^^^^
+
+The PXE system is also very easy to use. It takes three arguments: the
+network interface to listen on, the TFTP root path from which to serve
+files, and the PXE boot filename. It will automatically start a TFTP
+server and a DHCP server to serve hosts on the given interface. See
+--help for more details:
 
   ./pxed.py --help
 
-All tools also understand the --rfc1350 option, which forces them in basic
-RFC1350 compliance mode, disabling all TFTP extensions for increased
-compatibility would you encouter any problem with your target system.
+Mechanics for using pxed.py with the BOOTP server are not yet in place,
+but such a solution can easily be constructed manually by starting the
+BOOTP server and the TFTP server manually:
 
-Credits:
-^^^^^^^^
-The pTFTPd utilities are written by Maxime Petazzoni <maxime.petazzoni@bulix.org>
-and is released under the terms of the GNU General Public License. See
-COPYING for details.
-
-The micro-DHCP and PXE systems were contributed by David Anderson
-<dave@natulte.net>.
+  ./bootpd.py <interface> <PXE boot file> &
+  ./ptftpd.py
 
