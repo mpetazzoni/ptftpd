@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Author:     Maxime Petazzoni
 #             maxime.petazzoni@bulix.org
 #
