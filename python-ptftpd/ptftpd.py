@@ -479,7 +479,7 @@ def main():
     (options, args) = parser.parse_args()
     if len(args) != 1:
         parser.print_usage()
-        sys.exit(1)
+        return 1
 
     root = os.path.abspath(args[0])
 
@@ -493,9 +493,7 @@ def main():
         server.serve_forever();
     except TFTPServerConfigurationError, e:
         print 'TFTP server configuration error: %s' % e.message
+        return 1
 
-if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        pass
+    return 0
+
