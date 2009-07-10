@@ -1,9 +1,13 @@
-This package was debianized by Marc Poulhiès <dkm@kataplop.net> on
-Thu, 09 Jul 2009 17:36:18 +0200.
+This package was debianized by:
 
-It was downloaded from https://ssl.bulix.org/svn/ptftpd/trunk/
+    Maxime Petazzoni <maxime.petazzoni@bulix.org> on Thu, 10 Jul 2009 19:08:59 +0200
 
-Upstream Author(s):
+It was downloaded from:
+
+    https://ssl.bulix.org/svn/ptftpd/trunk/
+
+Upstream Author:
+
     Maxime Petazzoni <maxime.petazzoni@bulix.org>
 
 Copyright:
@@ -25,6 +29,14 @@ License:
     You should have received a copy of the GNU General Public License
     along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
+On Debian systems, the complete text of the GNU General Public License
+version 2 can be found in `/usr/share/common-licenses/GPL-2'.  the
+complete text of the GNU General Public License version 3 can be found
+in `/usr/share/common-licenses/GPL-3'.
 
-The Debian packaging is copyright 2009, Marc Poulhiès <dkm@kataplop.net> and
-is licensed under the GPL, see `/usr/share/common-licenses/GPL'.
+The Debian packaging is:
+
+    Copyright (C) 2009 Maxime Petazzoni <maxime.petazzoni@bulix.org>
+
+and is licensed under the GPL version 3, see above.
+

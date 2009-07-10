@@ -15,3 +15,5 @@ Thanks
 
 Thanks to David Anderson, Maxime Ripard, Thomas Petazzoni and Benjamin
 Collet for testing and using the pTFTPd utilities!
+
+Huge thanks to Marc Poulhiès for his help on the Debian packaging of pTFTPd.
