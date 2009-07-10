@@ -27,12 +27,14 @@ attempting to PXE boot. Use in conjunction with ptftpd.py to have a
 full, yet lightweight PXE boot setup.
 """
 
+import errno
+import logging
 import random
 import socket
 import struct
 import sys
 import time
-import logging
+
 l = logging.getLogger('dhcpd')
 
 # The IP protocol number in Ethernet frames.
@@ -272,7 +274,7 @@ class DHCPServer(object):
                             '74x'   # BOOTP legacy padding.
                             '128s'  # PXE boot file
                             'L'     # Magic cookie
-                            , 0x2, 0x1, 0x6, request_pkt.xid, 
+                            , 0x2, 0x1, 0x6, request_pkt.xid,
                             _pack_ip(client_ip), _pack_ip(self.tftp_server),
                             request_pkt.client_mac, self.bootfile,
                             DHCP_MAGIC_COOKIE)
@@ -348,29 +350,43 @@ class DHCPServer(object):
 def main():
     import optparse
 
-    options = optparse.OptionParser()
-    options.add_option("-t", "--tftp-server", dest="tftp_server",
-                       help="The IP address of the TFTP server, if not running "
-                       "on this machine", default=None)
-    options.add_option("-g", "--gateway", dest="router",
-                       help="The IP address of the default gateway, if not "
-                       "this machine", default=None)
-    options.add_option("-v", "--verbose", dest="loglevel", action="store_const",
-                       const=logging.INFO, help="Output information messages",
-                       default=logging.WARNING)
+    usage = "Usage: %prog [options] <iface> <PXE boot filename>"
+    parser = optparse.OptionParser(usage=usage)
+    parser.add_option("-t", "--tftp-server", dest="tftp_server",
+                      help="The IP address of the TFTP server, if not running "
+                      "on this machine", default=None)
+    parser.add_option("-g", "--gateway", dest="router",
+                      help="The IP address of the default gateway, if not "
+                      "this machine", default=None)
+    parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
+                      const=logging.INFO, help="Output information messages",
+                      default=logging.WARNING)
 
-    (options, args) = options.parse_args()
+    (options, args) = parser.parse_args()
 
     if len(args) != 2:
-        print "Usage: %s <interface> <PXE boot file>" % sys.argv[0]
-        sys.exit(1)
+        parser.print_help()
+        return 1
+
+    iface, bootfile = args
 
     logging.basicConfig(stream=sys.stdout, level=options.loglevel,
                         format='%(levelname)s(%(name)s): %(message)s')
 
-    server = DHCPServer(args[0], args[1], router=options.router,
-                        tftp_server=options.tftp_server)
-    server.serve_forever()
+    try:
+        server = DHCPServer(iface, bootfile, router=options.router,
+                            tftp_server=options.tftp_server)
+        server.serve_forever()
+    except socket.error, e:
+        sys.stderr.write('Socket error (%s): %s!\n' %
+                         (errno.errorcode[e[0]], e[1]))
+        return 1
+
+    return 0
 
 if __name__ == '__main__':
-    main()
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass
+

@@ -27,23 +27,27 @@ working is laughably small: specify the interface, the directory to
 serve over TFTP and the name of the PXE boot file, and you're all set.
 """
 
-import ptftpd
-import dhcpd
-import optparse
+import errno
+import logging
+import socket
 import sys
 import threading
-import logging
+
+import tftpserver
+import dhcpserver
 
 class DHCPThread(threading.Thread):
     def __init__(self, iface, bootfile, router):
         threading.Thread.__init__(self)
         self.setDaemon(True)
-        self.server = dhcpd.DHCPServer(iface, bootfile, router=router)
+        self.server = dhcpserver.DHCPServer(iface, bootfile, router=router)
 
     def run(self):
         self.server.serve_forever()
 
 def main():
+    import optparse
+
     usage = "Usage: %prog [options] <iface> <TFTP root> <PXE boot filename>"
     parser = optparse.OptionParser(usage=usage)
     parser.add_option("-r", "--rfc1350", dest="strict_rfc1350",
@@ -61,9 +65,8 @@ def main():
 
     (options, args) = parser.parse_args()
     if len(args) != 3:
-        print 'Missing required arguments'
-        parser.print_usage()
-        sys.exit(1)
+        parser.print_help()
+        return 1
 
     iface, root, bootfile = args
 
@@ -72,15 +75,23 @@ def main():
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)
-        tftp = ptftpd.TFTPServer(root, strict_rfc1350=options.strict_rfc1350)
-    except ptftpd.TFTPServerConfigurationError, e:
-        print 'TFTP server configuration error: %s' % e.message
+        tftp = tftpserver.TFTPServer(root, strict_rfc1350=options.strict_rfc1350)
+    except tftpserver.TFTPServerConfigurationError, e:
+        sys.stderr.write('TFTP server configuration error: %s!\n' %
+                         e.message)
+        return 1
+    except socket.error, e:
+        sys.stderr.write('Socket error (%s): %s!\n' %
+                         (errno.errorcode[e[0]], e[1]))
+        return 1
 
     dhcp.start()
     tftp.serve_forever()
+    return 0
 
 if __name__ == '__main__':
     try:
-        main()
+        sys.exit(main())
     except KeyboardInterrupt:
         pass
+

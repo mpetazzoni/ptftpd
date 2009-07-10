@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-# Author:     Maxime Petazzoni
-#             maxime.petazzoni@bulix.org
+# Author:     David Anderson
+#             dave@natulte.net
 #
 # This file is part of pTFTPd.
 #
@@ -20,7 +20,7 @@
 
 import sys
 
-from tftpserver import main
+from dhcpserver import main
 
 try:
     sys.exit(main())

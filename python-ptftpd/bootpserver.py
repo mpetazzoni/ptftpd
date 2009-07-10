@@ -29,12 +29,14 @@ If you are looking for something more advanced, use dhcpd.py, which is a more
 complete DHCP server, but just as efficient.
 """
 
+import errno
+import logging
 import random
 import socket
 import struct
 import sys
 import time
-import logging
+
 l = logging.getLogger('bootpd')
 
 # The IP protocol number in Ethernet frames.
@@ -316,29 +318,42 @@ class BOOTPServer(object):
 def main():
     import optparse
 
-    options = optparse.OptionParser()
-    options.add_option("-t", "--tftp-server", dest="tftp_server",
-                       help="The IP address of the TFTP server, if not running "
-                       "on this machine", default=None)
-    options.add_option("-g", "--gateway", dest="router",
-                       help="The IP address of the default gateway, if not "
-                       "this machine", default=None)
-    options.add_option("-v", "--verbose", dest="loglevel", action="store_const",
-                       const=logging.INFO, help="Output information messages",
-                       default=logging.WARNING)
+    usage = "Usage: %prog <interface> <PXE boot file>"
+    parser = optparse.OptionParser(usage=usage)
+    parser.add_option("-t", "--tftp-server", dest="tftp_server",
+                      help="The IP address of the TFTP server, if not running "
+                      "on this machine", default=None)
+    parser.add_option("-g", "--gateway", dest="router",
+                      help="The IP address of the default gateway, if not "
+                      "this machine", default=None)
+    parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
+                      const=logging.INFO, help="Output information messages",
+                      default=logging.WARNING)
 
-    (options, args) = options.parse_args()
+    (options, args) = parser.parse_args()
 
     if len(args) != 2:
-        print "Usage: %s <interface> <PXE boot file>" % sys.argv[0]
-        sys.exit(1)
+        parser.print_help()
+        return 1
+
+    iface, bootfile = args
 
     logging.basicConfig(stream=sys.stdout, level=options.loglevel,
                         format='%(levelname)s(%(name)s): %(message)s')
 
-    server = BOOTPServer(args[0], args[1], router=options.router,
-                        tftp_server=options.tftp_server)
-    server.serve_forever()
+    try:
+        server = BOOTPServer(iface, bootfile, router=options.router,
+                             tftp_server=options.tftp_server)
+        server.serve_forever()
+    except socket.error, e:
+        sys.stderr.write('Socket error (%s): %s!\n' %
+                         (errno.errorcode[e[0]], e[1]))
+        return 1
+
+    return 0
 
 if __name__ == '__main__':
-    main()
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass

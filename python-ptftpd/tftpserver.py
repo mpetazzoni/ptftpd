@@ -33,8 +33,8 @@ from datetime import datetime
 from datetime import timedelta
 import errno
 import logging
-import optparse
 import os
+import socket
 import SocketServer
 import stat
 import struct
@@ -461,6 +461,8 @@ class TFTPServer(object):
 
 
 def main():
+    import optparse
+
     usage = "Usage: %prog [options] <TFTP root>"
     parser = optparse.OptionParser(usage=usage)
     parser.add_option("-r", "--rfc1350", dest="strict_rfc1350",
@@ -478,7 +480,7 @@ def main():
 
     (options, args) = parser.parse_args()
     if len(args) != 1:
-        parser.print_usage()
+        parser.print_help()
         return 1
 
     root = os.path.abspath(args[0])
@@ -492,8 +494,19 @@ def main():
         server = TFTPServer(root, options.port, options.strict_rfc1350)
         server.serve_forever();
     except TFTPServerConfigurationError, e:
-        print 'TFTP server configuration error: %s' % e.message
+        sys.stderr.write('TFTP server configuration error: %s!' %
+                         e.message)
+        return 1
+    except socket.error, e:
+        sys.stderr.write('Socket error (%s): %s!\n' %
+                         (errno.errorcode[e[0]], e[1]))
         return 1
 
     return 0
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass
 

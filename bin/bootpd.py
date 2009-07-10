@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
-# Author:     Maxime Petazzoni
-#             maxime.petazzoni@bulix.org
+# Authors:    David Anderson
+#             dave@natulte.net
+#             Maxime Ripard
+#             maxime.ripard@anandra.org
 #
 # This file is part of pTFTPd.
 #
@@ -20,7 +22,7 @@
 
 import sys
 
-from tftpserver import main
+from bootpserver import main
 
 try:
     sys.exit(main())

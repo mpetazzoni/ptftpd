@@ -34,7 +34,6 @@ interval option from RFC2349.
 from datetime import datetime
 from datetime import timedelta
 import errno
-import getopt
 import os
 import socket
 import stat
@@ -595,7 +594,11 @@ def usage():
     print "                       This will discard other TFTP option values."
     print
 
-if __name__ == '__main__':
+
+def main():
+    # TODO: convert to optparse
+    import getopt
+
     try:
         opts, args = getopt.getopt(sys.argv[1:], '?h:p:b:m:r',
                                    ['help', 'host=',
@@ -603,7 +606,7 @@ if __name__ == '__main__':
                                     'mode=', 'rfc1350'])
     except getopt.GetoptError:
         usage()
-        sys.exit(1)
+        return 1
 
     host = _PTFTP_DEFAULT_HOST
     port = _PTFTP_DEFAULT_PORT
@@ -614,7 +617,7 @@ if __name__ == '__main__':
     for opt, val in opts:
         if opt in ('-?', '--help'):
             usage()
-            sys.exit(0)
+            return 0
         if opt in ('-h', '--host'):
             host = val
         if opt in ('-p', '--port'):
@@ -622,26 +625,30 @@ if __name__ == '__main__':
                 port = int(val)
             except ValueError:
                 print 'Port must be a number!'
-                sys.exit(2)
+                return 2
         if opt in ('-b', '--blksize'):
             try:
                 exts[proto.TFTP_OPTION_BLKSIZE] = int(val)
             except ValueError:
                 print 'Block size must be a number!'
-                sys.exit(2)
+                return 2
         if opt in ('-m', '--mode'):
             if val in proto.TFTP_MODES:
                 mode = val
             else:
                 print 'Transfer mode must be one of:', ', '.join(proto.TFTP_MODES)
-                sys.exit(2)
+                return 2
         if opt in ('-r', '--rfc1350'):
             rfc1350 = True
 
+    client = TFTPClient((host, port), exts, mode, rfc1350)
+    client.serve_forever()
+    print 'Goodbye.'
+    return 0
+
+if __name__ == '__main__':
     try:
-        client = TFTPClient((host, port), exts, mode, rfc1350)
-        client.serve_forever()
-        print 'Goodbye.'
+        sys.exit(main())
     except KeyboardInterrupt:
-        print 'Got ^C. Exiting'
-        sys.exit(0)
+        pass
+
