@@ -6,10 +6,23 @@ Build-Depends: cdbs, debhelper (>= 7), python-support
 Standards-Version: 3.8.0
 Homepage: https://ssl.bulix.org/svn/ptftpd/trunk/
 
-Package: python-ptftpd
+Package: python-ptftplib
 Architecture: all
+Section: python
 Depends: ${python:Depends}
-Description: pTFTPd, a pure-Python TFTP tool suite that works
+Description: pTFTPd, the pure-Python TFTP tool suite (lib files)
+ pTFTPd is a pure-Python TFTP tool suite. It features a TFTP server and client
+ fully compliant to the TFTP specification defined in RFC1350. It also supports
+ the TFTP Option Extension protocol (per RFC2347), the block size option as
+ defined in RFC2348 and the transfer size option from RFC2349.
+ .
+ The pTFTPd tool suite also includes a mini-DHCP server, a BOOTP server, and a
+ complexe PXE solution based on the DHCP and TFTP servers.
+
+Package: ptftp
+Architecture: all
+Depends: ${python:Depends}, python-ptftplib
+Description: pTFTPd, a pure-Python TFTP tool suite that works (CLI clients)
  pTFTPd is a pure-Python TFTP tool suite. It features a TFTP server and client
  fully compliant to the TFTP specification defined in RFC1350. It also supports
  the TFTP Option Extension protocol (per RFC2347), the block size option as

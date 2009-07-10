@@ -32,13 +32,14 @@ The pTFTPd tool suite also includes a mini-DHCP server, a BOOTP server, and a
 complexe PXE solution based on the DHCP and TFTP servers.
 """,
     version = "0.1",
+
     author = 'Maxime Petazzoni',
     author_email = 'maxime.petazzoni@bulix.org',
     url = "https://ssl.bulix.org/svn/ptftpd/trunk/",
     license = "GPL",
 
-    maintainer = 'Marc Poulhiès',
-    maintainer_email = 'dkm@kataplop.net',
+    maintainer = 'Maxime Petazzoni',
+    maintainer_email = 'maxime.petazzoni@bulix.org',
 
     packages = ['ptftplib'],
     scripts = ['bin/%s' % i for i in ["bootpd.py",
