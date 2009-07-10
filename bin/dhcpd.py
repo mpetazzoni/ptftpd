@@ -20,7 +20,7 @@
 
 import sys
 
-from dhcpserver import main
+from ptftplib.dhcpserver import main
 
 try:
     sys.exit(main())

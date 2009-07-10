@@ -20,7 +20,7 @@
 
 import sys
 
-from pxeserver import main
+from ptftplib.pxeserver import main
 
 try:
     sys.exit(main())

@@ -22,7 +22,7 @@
 
 import sys
 
-from bootpserver import main
+from ptftplib.bootpserver import main
 
 try:
     sys.exit(main())

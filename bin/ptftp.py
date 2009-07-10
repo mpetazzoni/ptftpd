@@ -20,7 +20,7 @@
 
 import sys
 
-from tftpclient import main
+from ptftplib.tftpclient import main
 
 try:
     sys.exit(main())
