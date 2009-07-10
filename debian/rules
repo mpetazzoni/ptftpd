@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+DEB_PYTHON_SYSTEM = pysupport
+include /usr/share/cdbs/1/class/python-distutils.mk
+
+#include /usr/share/cdbs/1/rules/simple-patchsys.mk
+
+DEB_COMPRESS_EXCLUDE := .py
+

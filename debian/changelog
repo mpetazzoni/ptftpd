@@ -1,0 +1,17 @@
+ptftpd (0.1svn20090710~ppa1) unstable; urgency=low
+
+  * upstream changes (code reorg)
+
+ -- Marc Poulhiès <dkm@kataplop.net>  Fri, 10 Jul 2009 17:36:22 +0200
+
+ptftpd (0.1-1svn10072009~ppa2) unstable; urgency=low
+
+  * change section from utils to net
+
+ -- Marc Poulhiès <dkm@kataplop.net>  Fri, 10 Jul 2009 08:05:20 +0200
+
+ptftpd (0.1-1svn10072009~ppa1) unstable; urgency=low
+
+  * Initial release
+
+ -- Marc Poulhiès <dkm@kataplop.net>  Thu, 09 Jul 2009 17:36:18 +0200
