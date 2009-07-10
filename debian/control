@@ -9,7 +9,7 @@ Homepage: https://ssl.bulix.org/svn/ptftpd/trunk/
 Package: python-ptftpd
 Architecture: all
 Depends: ${python:Depends}
-Description: pTFTPd is a simple TFTP daemon
+Description: pTFTPd, a pure-Python TFTP tool suite that works
 
  pTFTPd is a pure-Python TFTP tool suite. It features a TFTP server and client
  fully compliant to the TFTP specification defined in RFC1350. It also supports
