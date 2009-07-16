@@ -1,0 +1,22 @@
+.TH PTFTPD 1 "2009 Jul 17"
+.SH NAME
+ptftpd \- A full-featured, pure-Python TFTP server.
+.SH SYNOPSIS
+.br
+.B ptftpd
+[options] <TFTP root>
+.SH DESCRIPTION
+.B ptftpd
+is a TFTP server entirely written in Python. It is fully compliant
+with the TFTP (Trivial File Transfer Protocol) as defined in RFC1350. It also
+supports TFTP extensions defined in RFC2347, RFC2348 and RFC2349, to the
+exception of the timeout option only.
+.SH OPTIONS
+The options may be given in any order, but the TFTP server's root directory
+must be specified last on the command line.
+.SH SEE ALSO
+ptftp(1)
+.SH AUTHORS
+.B ptftpd
+is written and maintained by Maxime Petazzoni <maxime.petazzoni@bulix.org>,
+with help from a few others. See the AUTHORS file for more information.

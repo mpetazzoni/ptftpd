@@ -22,6 +22,7 @@ Description: pTFTPd, the pure-Python TFTP tool suite (lib files)
 Package: ptftp
 Architecture: all
 Depends: ${python:Depends}, python-ptftplib
+Conflicts: bootp
 Description: pTFTPd, a pure-Python TFTP tool suite that works (CLI clients)
  pTFTPd is a pure-Python TFTP tool suite. It features a TFTP server and client
  fully compliant to the TFTP specification defined in RFC1350. It also supports

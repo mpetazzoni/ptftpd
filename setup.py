@@ -31,7 +31,7 @@ defined in RFC2348 and the transfer size option from RFC2349.
 The pTFTPd tool suite also includes a mini-DHCP server, a BOOTP server, and a
 complexe PXE solution based on the DHCP and TFTP servers.
 """,
-    version = "0.1",
+    version = "0.2",
 
     author = 'Maxime Petazzoni',
     author_email = 'maxime.petazzoni@bulix.org',
@@ -42,10 +42,10 @@ complexe PXE solution based on the DHCP and TFTP servers.
     maintainer_email = 'maxime.petazzoni@bulix.org',
 
     packages = ['ptftplib'],
-    scripts = ['bin/%s' % i for i in ["bootpd.py",
-                                      "ptftpd.py",
-                                      "pxed.py",
-                                      "ptftp.py",
-                                      "dhcpd.py"]],
+    scripts = ['bin/%s' % i for i in ["bootpd",
+                                      "ptftpd",
+                                      "pxed",
+                                      "ptftp",
+                                      "dhcpd"]],
 )
 
