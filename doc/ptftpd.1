@@ -11,9 +11,45 @@ is a TFTP server entirely written in Python. It is fully compliant
 with the TFTP (Trivial File Transfer Protocol) as defined in RFC1350. It also
 supports TFTP extensions defined in RFC2347, RFC2348 and RFC2349, to the
 exception of the timeout option only.
+.PP
+.B ptftpd
+serves the given TFTP root directory to clients connecting to its listening
+port (defaults to the standard TFTP port UDP 69). It supports reads (RRQ) and
+writes (WRQ) in both netascii and octet mode and obviously complies to whatever
+directory and file permissions in the given TFTP root.
+.PP
+.B ptftpd
+also treats the TFTP root as a jail, and will make sure no operation is
+attempted to access files outside the TFTP root directory.
 .SH OPTIONS
 The options may be given in any order, but the TFTP server's root directory
 must be specified last on the command line.
+.br
+.TP 15
+\-h, \-\-help
+Display
+.B ptftpd
+help, options and usage.
+.TP
+\-r, \-\-rfc1350
+Force
+.B ptftpd
+to run in strict RFC1350 mode.
+Disables all TFTP extensions and options support from RFC2347, RFC2348 and
+RFC2349.
+.TP
+.RB \-p " PORT", " " \-\-port= "PORT"
+Set the port
+.B ptftpd
+listens for TFTP requests on.
+.TP
+\-v, \-\-verbose
+Be verbose.
+Output information messages.
+.TP
+\-D, \-\-debug
+Be even more verbose.
+Output debugging information.
 .SH SEE ALSO
 ptftp(1)
 .SH AUTHORS
