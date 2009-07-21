@@ -7,4 +7,4 @@ DEB_PYTHON_SYSTEM = pysupport
 include /usr/share/cdbs/1/class/python-distutils.mk
 
 DEB_COMPRESS_EXCLUDE := .py
-
+DEB_INSTALL_MANPAGES := doc/bootpd.1 doc/dhcpd.1 doc/ptftp.1 doc/ptftpd.1 doc/pxed.1
