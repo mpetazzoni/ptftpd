@@ -1,0 +1,51 @@
+.TH DHCPD 1 "2009 Jul 21"
+.SH NAME
+dhcpd \- A minimalistic, pure-Python DHCP server.
+.SH SYNOPSIS
+.br
+.B dhcpd
+[options] <iface> <PXE boot filename>
+.SH DESCRIPTION
+.B dhcpd
+is a minimalistic DHCP server written in Python and designed to work in
+conjunction with
+.BR ptftpd "(1)"
+from the Python TFTP tool suite. It listens on the given network interface for DHCP requests and serves IP addresses from the same subnet as the network segment it is listening to.
+.PP
+.B dhcpd
+also indicates to the DHCP clients which file they should use to boot (the PXE
+boot filename). This is very useful when running
+.B dhcpd
+alongside a TFTP server capable of serving this file to the client.
+.PP
+If you plan to run both a DHCP server and a TFTP server
+.RB ( "dhcpd" (1)
+and
+.BR ptftpd "(1)"
+for example), it is simpler to use
+.BR pxed "(1)"
+which combines the two functions more elegantly.
+.SH OPTIONS
+.TP 15
+\-h, \-\-help
+Display
+.B dhcpd
+help, options and usage.
+.TP
+.RB \-t " TFTP_SERVER", " " \-\-tftp-server= "TFTP_SERVER"
+Specify the IP address of the TFTP server, if not running on the same machine
+as this DHCP server.
+.TP
+.RB \-g " ROUTER", " " \-\-gateway= "ROUTER"
+Specify the IP address of the default gateway for the DHCP clients.
+.TP
+\-v, \-\-verbose
+Be verbose.
+Output information messages.
+.SH SEE ALSO
+ptftpd(1), pxed(1)
+.SH AUTHORS
+.B dhcpd
+was contributed by David Anderson <dave@natulte.net> and is maintained by
+Maxime Petazzoni <maxime.petazzoni@bulix.org>. See the AUTHORS file for more
+information.

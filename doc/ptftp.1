@@ -1,0 +1,94 @@
+.TH PTFTP 1 "2009 Jul 17"
+.SH NAME
+ptftp \- A simple, pure-Python TFTP client.
+.SH SYNOPSIS
+.br
+.B ptftp
+[options]
+.SH DESCRIPTION
+.B ptftp
+is a simple, command-line TFTP client. Like
+.BR ptftpd "(1),"
+it fully complies to the TFTP protocol defined in RFC1350, and supports TFTP
+extensions from RFC2347, RFC2348 and RFC2349 to the exception of the timeout
+option.
+.PP
+.B ptftp
+connects to the TFTP server via UDP on the specified port, defaulting to the normal TFTP port 69. The transfer mode and transfer block size can also be adjusted (see
+.B OPTIONS
+below for more details).
+.PP
+Once started,
+.B ptfp
+offers an interactive command line to the user where commands to get or push
+files can be issued. See the
+.B COMMANDS
+section below for a summary of the available commands and their usage.
+.SH OPTIONS
+The options may be given in any order on the command line.
+.br
+.TP 15
+\-?, \-\-help
+Display
+.B ptftp
+help, options and usage.
+.TP
+\-r, \-\-rfc1350
+Force
+.B ptftp
+to run in strict RFC1350 mode.
+Disables all TFTP extensions and options support from RFC2347, RFC2348 and
+RFC2349.
+.TP
+.RB \-h " HOST", " " \-\-host= "HOST"
+Specify the TFTP server to connect to.
+.TP
+.RB \-p " PORT", " " \-\-port= "PORT"
+Specify the port to use when connecting to the TFTP server.
+.TP
+.RB \-m " MODE", " " \-\-mode= "MODE"
+Set the TFTP transfer mode (defaults to 'octet'). It must be one of 'netascii'
+or 'octet'.
+.TP
+.RB \-b " BLKSIZE", " " \-\-blksize= "BLKSIZE"
+Set the transfer block size (defaults to 1400 bytes). Very low values have a
+dramatic effect on transfer performance as it forces TFTP packet fragmentation.
+.SH COMMANDS
+When started,
+.B ptftp
+will present a prompt to the user:
+.PP
+	tftp>
+.PP
+A few commands to operate the TFTP client are available:
+.PP
+.TP 12
+?, help
+Display the in-program help.
+.TP
+q, quit
+Quit the TFTP client.
+.TP
+.RB m, " " mode " [newmode]"
+Display or change the transfer mode to
+.BR newmode "."
+.TP
+.RB b, " " blksize " [newsize]"
+Display or change the transfer block size to
+.BR newsize "."
+.TP
+.RB g, " " get " " [-f] " filename"
+Get
+.B filename
+from the server. Use "-f" to overwrite a potentially existing local file.
+.TP
+.RB p, " " put " filename"
+Push
+.B filename
+to the server.
+.SH SEE ALSO
+ptftp(1)
+.SH AUTHORS
+.B ptftpd
+is written and maintained by Maxime Petazzoni <maxime.petazzoni@bulix.org>,
+with help from a few others. See the AUTHORS file for more information.

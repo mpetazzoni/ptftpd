@@ -1,0 +1,48 @@
+.TH PXED 1 "2009 Jul 21"
+.SH NAME
+pxed \- A complete PXE boot solution.
+.SH SYNOPSIS
+.br
+.B pxed
+[options] <iface> <TFTP root> <PXE boot filename>
+.SH DESCRIPTION
+.B pxed
+is a complete, pure-Python PXE solution to boot PXE clients with DHCP and TFTP.
+It is a simple wrapper around the
+.BR dhcpd "(1)"
+and
+.BR ptftpd "(1)"
+servers from the Python TFTP tool suite.
+.PP
+Options and arguments for
+.B pxed
+are very similar to
+.BR dhcpd "(1)"
+with the addition of the TFTP root which is passed to the TFTP server thread running
+.BR ptftpd "(1)."
+.SH OPTIONS
+.TP 15
+\-h, \-\-help
+Display
+.B pxed
+help, options and usage.
+.TP
+\-r, \-\-rfc1350
+Forces the TFTP server to run in strict RFC1350 mode. Disables all TFTP
+extensions from RFC2347, RFC2348 and RFC2349.
+.TP
+.RB \-g " ROUTER", " " \-\-gateway= "ROUTER"
+Specify the IP address of the default gateway for the BOOTP clients.
+.TP
+\-v, \-\-verbose
+Be verbose. Output information messages.
+.TP
+\-D, \-\-debug
+Be even more verbose. Output debugging information.
+.SH SEE ALSO
+dhcpd(1), ptftpd(1)
+.SH AUTHORS
+.B pxed
+was contributed David Anderson <dave@natulte.net>, and is maintained by Maxime
+Petazzoni <maxime.petazzoni@bulix.org>. See the AUTHORS file for more
+information.
