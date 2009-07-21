@@ -583,11 +583,11 @@ def usage():
     print "  -?    --help         Get help"
     print "  -h    --host <host>  Set TFTP server (default: %s)" % _PTFTP_DEFAULT_HOST
     print "  -p    --port <port>  Define the port to connect to (default: %d)" % _PTFTP_DEFAULT_PORT
-    print "  -m    --mode <mode>  Set transfer mode (default: %s bytes)" % _PTFTP_DEFAULT_MODE
-    print "                       Must be one of:", ', '.join(TFTP_MODES)
+    print "  -m    --mode <mode>  Set transfer mode (default: %s)" % _PTFTP_DEFAULT_MODE
+    print "                       Must be one of:", ', '.join(proto.TFTP_MODES)
     print
     print "Available extra options (using the TFTP option extension protocol):"
-    print "  -b    --blksize <n>  Set transfer block size (default: %d)" % TFTP_LAN_PACKET_SIZE
+    print "  -b    --blksize <n>  Set transfer block size (default: %d bytes)" % proto.TFTP_LAN_PACKET_SIZE
     print
     print "To disable the use of TFTP extensions:"
     print "  -r    --rfc1350      Strictly comply to the RFC1350 only (no extensions)"
