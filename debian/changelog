@@ -1,3 +1,9 @@
+ptftpd (1.0-1) unstable; urgency=low
+
+  * New major upstream version, 1.0.
+
+ -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Fri, 22 Jul 2009 23:53:27 +0200
+
 ptftpd (0.2-1) unstable; urgency=low
 
   * Remove the .py extension from the Python executables.

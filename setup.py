@@ -31,7 +31,7 @@ defined in RFC2348 and the transfer size option from RFC2349.
 The pTFTPd tool suite also includes a mini-DHCP server, a BOOTP server, and a
 complexe PXE solution based on the DHCP and TFTP servers.
 """,
-    version = "0.2",
+    version = "1.0",
 
     author = 'Maxime Petazzoni',
     author_email = 'maxime.petazzoni@bulix.org',
