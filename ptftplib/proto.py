@@ -199,8 +199,9 @@ class TFTPHelper:
           The data packet as a string.
         """
 
-        l.debug("  >  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, len(data)))
-        return struct.pack('!HH%ds' % len(data), OP_DATA, num, data)
+        data_len = len(data)
+        l.debug("  >  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, data_len))
+        return struct.pack('!HH%ds' % data_len, OP_DATA, num, data)
 
     def createOACK(opts):
         """
@@ -396,10 +397,10 @@ class TFTPHelper:
         return opts
 
     def getOP(data):
-        if data and len(data) >= 2:
+        if data:
             try:
                 return struct.unpack('!H', data[:2])[0]
-            except KeyError:
+            except (struct.error, KeyError):
                 raise SyntaxError()
 
         return None

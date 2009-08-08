@@ -79,13 +79,16 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         if not proto.TFTP_OPS.has_key(opcode):
             l.error("Unknown operation %d" % opn)
             response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
+            self.wfile.write(response)
+            self.wfile.flush()
+            return
 
         try:
             handler = getattr(self, "serve%s" % proto.TFTP_OPS[opcode])
         except AttributeError:
             l.error("Unsupported operation %s" % op)
             response = proto.TFTPHelper.createERROR(proto.ERROR_UNDEF,
-                                                    'Operation not supported by server.')
+                'Operation not supported by server.')
 
         response = handler(opcode, request[2:])
         if response:
@@ -433,7 +436,6 @@ class TFTPServerGarbageCollector(threading.Thread):
                 l.debug('Removed stale peer %s:%d.' % peer)
                 del self.clients[peer]
 
-
 class TFTPServer(object):
     def __init__(self, root, port=_PTFTPD_DEFAULT_PORT, strict_rfc1350=False,
                  notification_callbacks={}):
@@ -498,8 +500,9 @@ def main():
                          e.message)
         return 1
     except socket.error, e:
-        sys.stderr.write('Socket error (%s): %s!\n' %
-                         (errno.errorcode[e[0]], e[1]))
+        sys.stderr.write('Error creating a listening socket on port %d: '
+                         '%s (%s).\n' % (options.port, e[1],
+                                         errno.errorcode[e[0]]))
         return 1
 
     return 0

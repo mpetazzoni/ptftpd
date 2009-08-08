@@ -197,23 +197,25 @@ class TFTPState:
 
         self.packetnum += 1
 
-        if len(self.data) > blksize:
+        data_len = len(self.data)
+        if data_len > blksize:
             self.tosend = self.data[blksize:]
             self.data = self.data[:blksize]
-        elif len(self.data) < blksize:
+        elif data_len < blksize:
             self.file.close()
             self.state = STATE_SEND_LAST
 
         return proto.TFTPHelper.createDATA(self.packetnum, self.data)
 
     def __next_recv(self):
-        if self.data or self.data == '':
-            if len(self.data) < self.opts[proto.TFTP_OPTION_BLKSIZE]:
-                self.done = True
-
+        if self.data:
             # Convert CRLF to LF if needed
             if self.mode == 'netascii':
-                self.data = proto.NETASCII_TO_OCTET('\n', self.data)
+                self.data = proto.NETASCII_TO_OCTET.sub('\n', self.data)
+
+            data_len = len(self.data)
+            if data_len < self.opts[proto.TFTP_OPTION_BLKSIZE]:
+                self.done = True
 
             try:
                 self.filesize += len(self.data)

@@ -523,9 +523,9 @@ class TFTPClient:
 
 
         # Everything's OK, let's go
-        print "Pushing '%s' to the remote host..." % filename
+        print "Pushing '%s' to the remote host..." % filepath
 
-        packet = proto.TFTPHelper.createWRQ(filename, self.transfer_mode, opts)
+        packet = proto.TFTPHelper.createWRQ(filepath, self.transfer_mode, opts)
 
         transfer_start = datetime.today()
         self.sock.sendto(packet, self.peer)
