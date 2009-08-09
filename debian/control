@@ -2,8 +2,8 @@ Source: ptftpd
 Section: net
 Priority: extra
 Maintainer: Maxime Petazzoni <maxime.petazzoni@bulix.org>
-Build-Depends: cdbs, debhelper (>= 7), python-support
-Standards-Version: 3.8.0
+Build-Depends: cdbs, debhelper (>= 7), python (>= 2.5), python-support, ${misc:Depends}
+Standards-Version: 3.8.2
 Homepage: https://ssl.bulix.org/svn/ptftpd/trunk/
 
 Package: python-ptftplib
