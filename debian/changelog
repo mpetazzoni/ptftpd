@@ -1,31 +1,31 @@
-ptftpd (1.0-1) unstable; urgency=low
+ptftpd (1.0) unstable; urgency=low
 
   * New major upstream version, 1.0.
 
  -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Fri, 22 Jul 2009 23:53:27 +0200
 
-ptftpd (0.2-1) unstable; urgency=low
+ptftpd (0.2) unstable; urgency=low
 
   * Remove the .py extension from the Python executables.
   * New upstream version (0.2), including man pages.
 
  -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Fri, 16 Jul 2009 11:45:49 +0200
 
-ptftpd (0.1-3) unstable; urgency=low
+ptftpd (0.1.3) unstable; urgency=low
 
   * Use two distinct packages, one for the python module and one for the CLI
     tools.
 
  -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Fri, 10 Jul 2009 23:38:52 +0200
 
-ptftpd (0.1-2) unstable; urgency=low
+ptftpd (0.1.2) unstable; urgency=low
 
   * Upstream changes (code reorg)
   * Debian packaging fixes
 
  -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Fri, 10 Jul 2009 19:11:17 +0200
 
-ptftpd (0.1-1) unstable; urgency=low
+ptftpd (0.1.1) unstable; urgency=low
 
   * Initial release
 

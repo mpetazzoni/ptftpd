@@ -2,14 +2,15 @@ Source: ptftpd
 Section: net
 Priority: extra
 Maintainer: Maxime Petazzoni <maxime.petazzoni@bulix.org>
-Build-Depends: cdbs, debhelper (>= 7), python (>= 2.5), python-support, ${misc:Depends}
+Build-Depends: cdbs, debhelper (>= 7), python (>= 2.5), python-support
+Depends: ${misc:Depends}
 Standards-Version: 3.8.2
 Homepage: https://ssl.bulix.org/svn/ptftpd/trunk/
 
 Package: python-ptftplib
 Architecture: all
 Section: python
-Depends: ${python:Depends}
+Depends: ${python:Depends}, ${misc:Depends}
 Description: pTFTPd, the pure-Python TFTP tool suite (lib files)
  pTFTPd is a pure-Python TFTP tool suite. It features a TFTP server and client
  fully compliant to the TFTP specification defined in RFC1350. It also supports
@@ -21,7 +22,7 @@ Description: pTFTPd, the pure-Python TFTP tool suite (lib files)
 
 Package: ptftp
 Architecture: all
-Depends: ${python:Depends}, python-ptftplib
+Depends: ${python:Depends}, ${misc:Depends}, python-ptftplib
 Conflicts: bootp
 Description: pTFTPd, a pure-Python TFTP tool suite that works (CLI clients)
  pTFTPd is a pure-Python TFTP tool suite. It features a TFTP server and client
