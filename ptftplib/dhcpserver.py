@@ -66,6 +66,11 @@ DHCP_OPTION_CLIENT_UUID = 61          # The client machine UUID
 DHCP_OPTION_PXE_VENDOR = 43           # PXE vendor extensions
 DHCP_OPTION_CLIENT_UUID2 = 97         # The client machine UUID
 
+# Client UUID length. Some PXE clients use UUID2 to provide the client machine
+# MAC address, resulting in invalid UUID parsing. We ensure we're dealing with
+# client UUID by checking their length (16 bytes).
+DHCP_CLIENT_UUID_LENGTH = 16
+
 # DHCP lease timeout in seconds. Internally, we wait longer, to let
 # the client wrap up cleanly.
 DHCP_LEASE_TIMEOUT = 10*60            # 10 minutes
@@ -193,7 +198,9 @@ class DhcpPacket(object):
                 # We only care about interesting "incoming" DHCP ops.
                 if self.op not in (DHCP_OP_DHCPDISCOVER, DHCP_OP_DHCPREQUEST):
                     raise UninterestingDhcpPacket()
-            elif option in (DHCP_OPTION_CLIENT_UUID, DHCP_OPTION_CLIENT_UUID2):
+            elif (option in (DHCP_OPTION_CLIENT_UUID,
+                             DHCP_OPTION_CLIENT_UUID2) and
+                  len(value[1:]) == DHCP_CLIENT_UUID_LENGTH):
                 # First byte of the UUID is \0
                 self.uuid = _unpack_uuid(value[1:])
             elif option == DHCP_OPTION_PXE_REQ:
