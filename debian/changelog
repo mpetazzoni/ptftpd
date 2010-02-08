@@ -5,6 +5,8 @@ ptftpd (1.0.1) unstable; urgency=low
     network packets are duplicated/resent (fixes some U-Boot TFTP
     problems).
 
+ -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Mon, 08 Feb 2010 14:33:23 +0100
+
 ptftpd (1.0) unstable; urgency=low
 
   * New major upstream version, 1.0.
