@@ -284,7 +284,11 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return peer_state.next()
 
         elif peer_state.state == state.STATE_SEND:
-            if peer_state.packetnum != num:
+            if peer_state.packetnum == num + 1:
+                # Ignore duplicate N-1 ACK packets
+                l.debug('Got duplicate ACK packet #%d. Ignoring.' % num)
+                pass
+            elif peer_state.packetnum != num:
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ILLEGAL_OP
                 l.error('Got ACK with incoherent data packet number. '
