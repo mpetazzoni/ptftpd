@@ -1,3 +1,10 @@
+ptftpd (1.0.1) unstable; urgency=low
+
+  * New upstream version 1.0.1.
+  * Ignore duplicate N-1 ACK packets that can happen when
+    network packets are duplicated/resent (fixes some U-Boot TFTP
+    problems).
+
 ptftpd (1.0) unstable; urgency=low
 
   * New major upstream version, 1.0.
