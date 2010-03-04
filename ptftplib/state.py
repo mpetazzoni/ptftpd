@@ -208,28 +208,27 @@ class TFTPState:
         return proto.TFTPHelper.createDATA(self.packetnum, self.data)
 
     def __next_recv(self):
-        if self.data:
-            # Convert CRLF to LF if needed
-            if self.mode == 'netascii':
-                self.data = proto.NETASCII_TO_OCTET.sub('\n', self.data)
+        # Convert CRLF to LF if needed
+        if self.mode == 'netascii':
+            self.data = proto.NETASCII_TO_OCTET.sub('\n', self.data)
 
-            data_len = len(self.data)
-            if data_len < self.opts[proto.TFTP_OPTION_BLKSIZE]:
-                self.done = True
+        data_len = len(self.data)
+        if data_len < self.opts[proto.TFTP_OPTION_BLKSIZE]:
+            self.done = True
 
-            try:
-                self.filesize += len(self.data)
-                self.file.write(self.data)
-            except IOError, e:
-                self.file.close()
-                if e.errno == errno.ENOSPC:
-                    return proto.TFTPHelper.createERROR(proto.ERROR_DISK_FULL)
-                else:
-                    print 'Undefined error occured: %s!' % errno.errorcode[e.errno]
-                    return proto.TFTPHelper.createERROR(proto.ERROR_UNDEF)
+        try:
+            self.filesize += len(self.data)
+            self.file.write(self.data)
+        except IOError, e:
+            self.file.close()
+            if e.errno == errno.ENOSPC:
+                return proto.TFTPHelper.createERROR(proto.ERROR_DISK_FULL)
+            else:
+                print 'Undefined error occured: %s!' % errno.errorcode[e.errno]
+                return proto.TFTPHelper.createERROR(proto.ERROR_UNDEF)
 
-            if self.done:
-                self.file.close()
+        if self.done:
+            self.file.close()
 
         ack = proto.TFTPHelper.createACK(self.packetnum)
 

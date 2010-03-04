@@ -360,7 +360,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             next = peer_state.next()
 
             if peer_state.done:
-                l.debug("  <  DATA: %d packet(s) recevied."
+                l.debug("  <  DATA: %d packet(s) received."
                         % peer_state.packetnum)
                 l.debug("  >   ACK: Transfer complete, %d byte(s)."
                         % peer_state.filesize)
