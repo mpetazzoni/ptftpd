@@ -42,6 +42,11 @@ TFTP_DEFAULT_PACKET_SIZE = 512
 # Enhanced data packet size for LAN networks
 TFTP_LAN_PACKET_SIZE = 1400
 
+# Maximum packet number (2^16). When reached, we may want to wraparound and
+# reset to 0 to continue transfer (some clients may not support it).
+# The wraparound can be disabled with --rfc1350.
+TFTP_PACKETNUM_MAX = 65536
+
 # TFTP opcodes
 TFTP_OPCODE_LEN = 2
 

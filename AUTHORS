@@ -10,10 +10,13 @@ The pTFTPd tool suite is written and maintained by Maxime Petazzoni
   Maxime Ripard       <maxime.ripard@anandra.org>
     BOOTPd, based on David Anderson's work on DHCPd.
 
+  Maxime Hadjinglian  <maxime.hadjinlian@gmail.com>
+    Packet number wraparound feature for pTFTP and pTFTPd.
+
 Thanks
 ^^^^^^
 
-Thanks to David Anderson, Maxime Ripard, Thomas Petazzoni and Benjamin
-Collet for testing and using the pTFTPd utilities!
+Thanks to David Anderson, Maxime Ripard, Thomas Petazzoni, Benjamin Collet and
+Maxime Hadjinglian for testing and using the pTFTPd utilities!
 
 Huge thanks to Marc Poulhiès for his help on the Debian packaging of pTFTPd.

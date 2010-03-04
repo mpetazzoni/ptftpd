@@ -331,6 +331,9 @@ class TFTPClient:
                 self.PTFTP_STATE.state = state.STATE_ERROR
                 self.PTFTP_STATE.error = proto.ERROR_ILLEGAL_OP
 
+            if not self.rfc1350 and num >= proto.TFTP_PACKETNUM_MAX-1:
+                print 'Packet number wraparound.'
+
             return self.PTFTP_STATE.next()
 
         elif self.PTFTP_STATE.state == state.STATE_SEND_LAST:
@@ -373,6 +376,10 @@ class TFTPClient:
                 self.PTFTP_STATE.error = proto.ERROR_ILLEGAL_OP
             else:
                 self.PTFTP_STATE.data = data
+
+            if (not self.PTFTP_STATE.done and not self.rfc1350 and
+                num >= proto.TFTP_PACKETNUM_MAX-1):
+                print 'Packet number wraparound.'
 
             return self.PTFTP_STATE.next()
 
@@ -440,7 +447,7 @@ class TFTPClient:
                 pass
 
         self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_RRQ,
-                '', filepath, self.transfer_mode)
+                '', filepath, self.transfer_mode, not self.rfc1350)
 
         # Then, before sending anything to the server, open the file
         # for writing
@@ -501,7 +508,7 @@ class TFTPClient:
         filename = os.path.split(filepath)
 
         self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_WRQ,
-                '', filepath, self.transfer_mode)
+                '', filepath, self.transfer_mode, not self.rfc1350)
 
         try:
             self.PTFTP_STATE.file = open(filepath)

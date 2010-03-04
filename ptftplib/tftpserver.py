@@ -118,7 +118,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         peer_state = state.TFTPState(self.client_address, op,
-                self.server.root, filename, mode)
+                self.server.root, filename, mode,
+                not self.server.strict_rfc1350)
 
         if not peer_state.filepath.startswith(self.server.root):
             peer_state.state = state.STATE_ERROR
@@ -190,7 +191,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         peer_state = state.TFTPState(self.client_address, op,
-                self.server.root, filename, mode)
+                self.server.root, filename, mode,
+                not self.server.strict_rfc1350)
 
         if not peer_state.filepath.startswith(self.server.root):
             peer_state.state = state.STATE_ERROR
@@ -295,6 +297,10 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                         'Aborting transfer.',
                         extra=peer_state.extra(notify.TRANSFER_FAILED))
 
+            if (not self.server.strict_rfc1350 and
+                num == proto.TFTP_PACKETNUM_MAX-1):
+                l.debug('Packet number wraparound.')
+
             return peer_state.next()
 
         elif peer_state.state == state.STATE_RECV and num == 0:
@@ -306,7 +312,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         elif peer_state.state == state.STATE_SEND_LAST:
-            l.debug("  >  DATA: %d data packet(s) sent." % peer_state.packetnum)
+            l.debug("  >  DATA: %d data packet(s) sent."
+                    % peer_state.total_packets)
             l.debug("  <   ACK: Transfer complete, %d byte(s)."
                     % peer_state.filesize)
             l.info('Transfer of file %s completed.' % peer_state.filename,
@@ -361,12 +368,16 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
             if peer_state.done:
                 l.debug("  <  DATA: %d packet(s) received."
-                        % peer_state.packetnum)
+                        % peer_state.total_packets)
                 l.debug("  >   ACK: Transfer complete, %d byte(s)."
                         % peer_state.filesize)
                 l.info('Transfer of file %s completed.' % peer_state.filename,
                        extra=peer_state.extra(notify.TRANSFER_COMPLETED))
                 del self.server.clients[self.client_address]
+
+            elif (not self.server.strict_rfc1350 and
+                  num == proto.TFTP_PACKETNUM_MAX-1):
+                l.debug('Packet number wraparound.')
 
             return next
 

@@ -41,7 +41,7 @@ class TFTPState:
     with a client.
     """
 
-    def __init__(self, peer, op, path, filename, mode):
+    def __init__(self, peer, op, path, filename, mode, loop_packet=True):
         """
         Initializes a new TFTP state for the given peer.
 
@@ -51,6 +51,7 @@ class TFTPState:
           path (string): the server root path.
           filename (string): the relative path of the used file.
           mode (string): the transfer mode requested.
+          loop_packet (boolean): activate packet number wraparound.
         Returns:
           A new, initialized TFTPState object with the options parsed.
         """
@@ -59,18 +60,24 @@ class TFTPState:
                 (peer, op, path, filename, mode)
         self.filepath = os.path.abspath(os.path.join(self.path, self.filename))
 
-        self.file = None               # File object to read from or write to
-        self.filesize = 0              # File size in bytes
-        self.state = None              # Current transaction state (send/recv/last/error)
-        self.done = False
+        self.file = None                    # File object to read from or write to
+        self.filesize = 0                   # File size in bytes
+        self.state = None                   # Current transaction state
+                                            # (send/recv/last/error)
+        self.done = False                   # Transaction complete flag
 
         # Option defaults
-        self.opts = { proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE }
+        self.opts = { proto.TFTP_OPTION_BLKSIZE:
+                        proto.TFTP_DEFAULT_PACKET_SIZE }
 
         self.last_seen = datetime.today()
 
-        self.packetnum = None          # Current data packet number
-        self.error = None              # TFTP error code to send (if state == error)
+        self.packetnum = None               # Current data packet number
+        self.loop_packetnum = loop_packet   # Packet number wraparound toggle
+        self.total_packets = 0              # Total number of data packets sent
+                                            # or received
+        self.error = None                   # TFTP error code to send
+                                            # (if state == error)
         self.data = None
         self.tosend = ""
 
@@ -196,6 +203,11 @@ class TFTPState:
         self.tosend = ""
 
         self.packetnum += 1
+        self.total_packets += 1
+
+        # Packet number wraparound
+        if self.packetnum == proto.TFTP_PACKETNUM_MAX and self.loop_packetnum:
+            self.packetnum = 1
 
         data_len = len(self.data)
         if data_len > blksize:
@@ -234,6 +246,11 @@ class TFTPState:
 
         if not self.done:
             self.packetnum += 1
+            self.total_packets += 1
+
+        # Packet number wraparound
+        if self.packetnum == proto.TFTP_PACKETNUM_MAX and self.loop_packetnum:
+            self.packetnum = 1
 
         return ack
 

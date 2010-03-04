@@ -14,12 +14,21 @@ extensions from RFC2347, RFC2348 and RFC2349 to the exception of the timeout
 option.
 .PP
 .B ptftp
-connects to the TFTP server via UDP on the specified port, defaulting to the normal TFTP port 69. The transfer mode and transfer block size can also be adjusted (see
+connects to the TFTP server via UDP on the specified port, defaulting to the
+normal TFTP port 69. The transfer mode and transfer block size can also be
+adjusted (see
 .B OPTIONS
 below for more details).
 .PP
+.B ptftp
+supports the packet number wraparound feature, allowing for the transfer of
+files of arbitrary size by resetting the packet number to 1 when it reaches the
+protocol maximum of 65535 = 2^16-1. This behavior can be disabled with the
+.B \-\-rfc1350
+option (strict RFC1350 compliance operation).
+.PP
 Once started,
-.B ptfp
+.B ptftp
 offers an interactive command line to the user where commands to get or push
 files can be issued. See the
 .B COMMANDS
@@ -38,7 +47,7 @@ Force
 .B ptftp
 to run in strict RFC1350 mode.
 Disables all TFTP extensions and options support from RFC2347, RFC2348 and
-RFC2349.
+RFC2349, as well as the packet number wraparound feature.
 .TP
 .RB \-h " HOST", " " \-\-host= "HOST"
 Specify the TFTP server to connect to.

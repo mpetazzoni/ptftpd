@@ -19,6 +19,14 @@ writes (WRQ) in both netascii and octet mode and obviously complies to whatever
 directory and file permissions in the given TFTP root.
 .PP
 .B ptftpd
+is able to serve files of arbitrary size using the packet number wraparound
+feature (reset of the DATA packet number when it reaches the protocol maximum
+of 65535 = 2^16-1), but the client must support it. This behavior can be
+disabled by the
+.B \-\-rfc1350
+option (strict RFC1350 compliance operation).
+.PP
+.B ptftpd
 also treats the TFTP root as a jail, and will make sure no operation is
 attempted to access files outside the TFTP root directory.
 .SH OPTIONS
@@ -36,7 +44,8 @@ Force
 .B ptftpd
 to run in strict RFC1350 mode.
 Disables all TFTP extensions and options support from RFC2347, RFC2348 and
-RFC2349.
+RFC2349, as well as the packet number wraparound feature (reset of the DATA
+packet number to 1 when it reaches the maximum packet number 65536).
 .TP
 .RB \-p " PORT", " " \-\-port= "PORT"
 Set the port
