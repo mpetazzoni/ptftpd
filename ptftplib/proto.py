@@ -18,8 +18,16 @@
 
 import re
 import struct
-import logging
-l = logging.getLogger('tftp-proto')
+
+import notify
+l = notify.getLogger('tftp-proto')
+notify.NullEngine.install(l)
+
+# Uncomment these lines to enable full protocol dump.
+# import sys
+# import logging
+#
+# notify.StreamEngine.install(l, sys.stderr, logging.DEBUG)
 
 # The following values are defined in the following RFC documents:
 #   - RFC1350 - The TFTP Protocol (revision 2)
@@ -93,9 +101,6 @@ TFTP_BLKSIZE_MAX = 65464
 
 TFTP_TIMEOUT_MIN = 1
 TFTP_TIMEOUT_MAX = 255
-
-# Command verbosity
-verbose = 0
 
 class TFTPHelper:
     """
@@ -213,8 +218,7 @@ class TFTPHelper:
           The OACK packet as a string.
         """
 
-        if verbose > 0:
-            l.debug("  >  %s: %s" % (TFTP_OPS[OP_OACK], opts))
+        l.debug("  >  %s: %s" % (TFTP_OPS[OP_OACK], opts))
 
         opts_str = ""
         for opt, val in opts.iteritems():

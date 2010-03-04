@@ -42,14 +42,17 @@ _STATE_NAMES = {
         TRANSFER_FAILED: 'FAILED',
 }
 
-class DetailFilter(logging.Filter):
-    """This log filter filters log records that don't posess the extra
-    information we require for advanced notifications (host, port, file name
-    and transfer state)."""
+class NullEngine(logging.Handler):
+    """A no-op notification engine. Simply results in no logging messages being
+    outputted anywhere."""
 
-    def filter(self, record):
-        r = record.__dict__
-        return ('host' in r and 'port' in r and 'file' in r and 'state' in r)
+    def emit(self, record):
+        pass
+
+    @staticmethod
+    def install(logger):
+        logger.addHandler(NullEngine())
+
 
 class StreamEngine(logging.StreamHandler):
     """Simple stream log handler, similar to what you get using
@@ -77,6 +80,16 @@ class StreamEngine(logging.StreamHandler):
             format='%(message)s'):
         handler = StreamEngine(stream, loglevel, format)
         logger.addHandler(handler)
+
+
+class DetailFilter(logging.Filter):
+    """This log filter filters log records that don't posess the extra
+    information we require for advanced notifications (host, port, file name
+    and transfer state)."""
+
+    def filter(self, record):
+        r = record.__dict__
+        return ('host' in r and 'port' in r and 'file' in r and 'state' in r)
 
 class DetailledStreamEngine(StreamEngine):
     """The DetailledStreamEngine is a extension of the StreamEngine define
