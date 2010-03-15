@@ -22,7 +22,7 @@ below for more details).
 .PP
 .B ptftp
 supports the packet number wraparound feature, allowing for the transfer of
-files of arbitrary size by resetting the packet number to 1 when it reaches the
+files of arbitrary size by resetting the packet number to 0 when it reaches the
 protocol maximum of 65535 = 2^16-1. This behavior can be disabled with the
 .B \-\-rfc1350
 option (strict RFC1350 compliance operation).

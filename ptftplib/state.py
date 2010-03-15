@@ -207,7 +207,7 @@ class TFTPState:
 
         # Packet number wraparound
         if self.packetnum == proto.TFTP_PACKETNUM_MAX and self.loop_packetnum:
-            self.packetnum = 1
+            self.packetnum = proto.TFTP_PACKETNUM_RESET
 
         data_len = len(self.data)
         if data_len > blksize:
@@ -250,7 +250,7 @@ class TFTPState:
 
         # Packet number wraparound
         if self.packetnum == proto.TFTP_PACKETNUM_MAX and self.loop_packetnum:
-            self.packetnum = 1
+            self.packetnum = proto.TFTP_PACKETNUM_RESET
 
         return ack
 
