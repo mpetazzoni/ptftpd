@@ -90,6 +90,10 @@ Display or change the transfer block size to
 Get
 .B filename
 from the server. Use "-f" to overwrite a potentially existing local file.
+The received data is written into a temporary file that is only moved
+to a local file where ptftp is executed if the transfer completed
+successfully, thus avoiding loosing the content of a previous file of
+the same name if the transfer fails or is interrupted.
 .TP
 .RB p, " " put " filename"
 Push

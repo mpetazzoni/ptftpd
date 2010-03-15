@@ -35,9 +35,11 @@ from datetime import datetime
 from datetime import timedelta
 import errno
 import os
+import shutil
 import socket
 import stat
 import sys
+import tempfile
 import time
 
 import notify
@@ -452,12 +454,16 @@ class TFTPClient:
         # Then, before sending anything to the server, open the file
         # for writing
         try:
-            self.PTFTP_STATE.file = open(filename, "w")
+            # We don't want tempfile to automatically delete the temporary
+            # file on close() as we have to copy its content to the destination
+            # file first. We'll handle it's deletion on our own.
+            self.PTFTP_STATE.file = tempfile.NamedTemporaryFile(delete=False)
             self.PTFTP_STATE.packetnum = 1
             self.PTFTP_STATE.state = state.STATE_RECV
         except IOError, e:
             print 'Error:', os.strerror(e.errno)
-            print "Can't write to local file %s!" % filename
+            print "Can't write to temporary file %s!" % \
+                self.PTFTP_STATE.file.name
             return False
 
         opts = dict(self.opts)
@@ -483,11 +489,25 @@ class TFTPClient:
             error, errmsg = self.error
             if error and errmsg:
                 print 'Error:', errmsg
+            # Remove the temporary file on error. The destionation file,
+            # if it already existed, is left untouched.
+            self.PTFTP_STATE.file.close()
+            os.remove(self.PTFTP_STATE.file.name)
+            return False
+
+        # Copy the temporary file to its final destination
+        try:
+            shutil.copy(self.PTFTP_STATE.file.name, filename)
+        except IOError, e:
+            print 'Error:', os.strerror(e.errno)
+            print "Can't copy temporary file to local file %s!" % filename
             return False
 
         print ("Transfer complete, %d bytes (%.2f kB/s)" %
                (self.PTFTP_STATE.filesize,
                 self.__get_speed(self.PTFTP_STATE.filesize, transfer_time)))
+        self.PTFTP_STATE.file.close()
+        os.remove(self.PTFTP_STATE.file.name)
         return True
 
     def put(self, args):
