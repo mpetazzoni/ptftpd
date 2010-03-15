@@ -130,7 +130,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return self.finish_state(peer_state)
 
         try:
-            peer_state.file = open(peer_state.filepath)
+            peer_state.file = open(peer_state.filepath, 'rb')
             peer_state.filesize = os.stat(peer_state.filepath)[stat.ST_SIZE]
             peer_state.packetnum = 0
             peer_state.state = state.STATE_SEND
@@ -218,7 +218,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # exist, create it and go on
             if e.errno == errno.ENOENT:
                 try:
-                    peer_state.file = open(peer_state.filepath, 'w')
+                    peer_state.file = open(peer_state.filepath, 'wb')
                     peer_state.packetnum = 0
                     peer_state.state = state.STATE_RECV
                     l.info('Upload of %s began.' % filename,

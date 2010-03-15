@@ -511,7 +511,7 @@ class TFTPClient:
                 '', filepath, self.transfer_mode, not self.rfc1350)
 
         try:
-            self.PTFTP_STATE.file = open(filepath)
+            self.PTFTP_STATE.file = open(filepath, 'rb')
             self.PTFTP_STATE.filesize = os.stat(filepath)[stat.ST_SIZE]
             self.PTFTP_STATE.packetnum = 0
             self.PTFTP_STATE.state = state.STATE_SEND
