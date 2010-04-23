@@ -35,7 +35,9 @@ import struct
 import sys
 import time
 
-l = logging.getLogger('dhcpd')
+import notify
+
+l = notify.getLogger('dhcpd')
 
 # The IP protocol number in Ethernet frames.
 ETHERNET_IP_PROTO = 0x800
@@ -377,8 +379,10 @@ def main():
 
     iface, bootfile = args
 
-    logging.basicConfig(stream=sys.stdout, level=options.loglevel,
-                        format='%(levelname)s(%(name)s): %(message)s')
+    # Setup notification logging
+    notify.StreamEngine.install(l, stream=sys.stdout,
+        loglevel=options.loglevel,
+        format='%(levelname)s(%(name)s): %(message)s')
 
     try:
         server = DHCPServer(iface, bootfile, router=options.router,

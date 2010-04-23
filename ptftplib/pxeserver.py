@@ -33,8 +33,11 @@ import socket
 import sys
 import threading
 
+import notify
 import tftpserver
 import dhcpserver
+
+l = notify.getLogger('pxed')
 
 class DHCPThread(threading.Thread):
     def __init__(self, iface, bootfile, router):
@@ -70,8 +73,16 @@ def main():
 
     iface, root, bootfile = args
 
-    logging.basicConfig(stream=sys.stdout, level=options.loglevel,
-                        format='%(levelname)s(%(name)s): %(message)s')
+    # Setup notification logging
+    notify.StreamEngine.install(l, stream=sys.stdout,
+        loglevel=options.loglevel,
+        format='%(levelname)s(%(name)s): %(message)s')
+    notify.StreamEngine.install(dhcpserver.l, stream=sys.stdout,
+        loglevel=options.loglevel,
+        format='%(levelname)s(%(name)s): %(message)s')
+    notify.StreamEngine.install(tftpserver.l, stream=sys.stdout,
+        loglevel=options.loglevel,
+        format='%(levelname)s(%(name)s): %(message)s')
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)
