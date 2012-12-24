@@ -86,7 +86,8 @@ def main():
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)
-        tftp = tftpserver.TFTPServer(root, strict_rfc1350=options.strict_rfc1350)
+        tftp = tftpserver.TFTPServer(iface, root,
+                                     strict_rfc1350=options.strict_rfc1350)
     except tftpserver.TFTPServerConfigurationError, e:
         sys.stderr.write('TFTP server configuration error: %s!\n' %
                          e.message)

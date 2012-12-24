@@ -52,6 +52,35 @@ _PTFTPD_SERVER_NAME = 'pFTPd'
 _PTFTPD_DEFAULT_PORT = 69
 _PTFTPD_DEFAULT_PATH = '/tftpboot'
 
+# Linux ioctl() commands to query the kernel.
+SIOCGIFADDR = 0x8915                  # IP address for interface
+SIOCGIFNETMASK = 0x891B               # Netmask for interface
+SIOCGIFHWADDR = 0x8927                # MAC address for interface
+
+def get_ip_config_for_interface(iface):
+    """Retrieve and return the IP address/netmask and MAC address of the
+    given interface."""
+
+    if 'linux' not in sys.platform:
+        raise NotImplementedError("get_ip_address_for_interface is not "
+                                  "implemented on your OS.")
+
+    def ip_from_response(resp):
+        return socket.inet_ntoa(resp[20:24])
+
+    def mac_from_response(resp):
+        mac = struct.unpack('!6B', resp[18:24])
+        return ':'.join(['%02x' % x for x in mac])
+
+    import fcntl
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ifname = struct.pack('256s', iface[:15])
+    ip = fcntl.ioctl(s.fileno(), SIOCGIFADDR, ifname)
+    mask = fcntl.ioctl(s.fileno(), SIOCGIFNETMASK, ifname)
+    mac = fcntl.ioctl(s.fileno(), SIOCGIFHWADDR, ifname)
+    return ip_from_response(ip), ip_from_response(mask),\
+            mac_from_response(mac)
+
 class TFTPServerConfigurationError(Exception):
     """The configuration of the pTFTPd is incorrect."""
 
@@ -452,16 +481,18 @@ class TFTPServerGarbageCollector(threading.Thread):
                 del self.clients[peer]
 
 class TFTPServer(object):
-    def __init__(self, root, port=_PTFTPD_DEFAULT_PORT, strict_rfc1350=False,
-                 notification_callbacks={}):
-        self.root, self.port, self.strict_rfc1350 = root, port, strict_rfc1350
+    def __init__(self, iface, root, port=_PTFTPD_DEFAULT_PORT,
+                 strict_rfc1350=False, notification_callbacks={}):
+        self.iface, self.root, self.port, self.strict_rfc1350 = \
+                iface, root, port, strict_rfc1350
         self.client_registry = {}
 
         if not os.path.isdir(self.root):
             raise TFTPServerConfigurationError(
                 "The specified TFTP root does not exist")
 
-        self.server = SocketServer.UDPServer(('', port), TFTPServerHandler)
+        self.ip, self.netmask, self.mac = get_ip_config_for_interface(self.iface)
+        self.server = SocketServer.UDPServer((self.ip, port), TFTPServerHandler)
         self.server.root = self.root
         self.server.strict_rfc1350 = self.strict_rfc1350
         self.server.clients = self.client_registry
@@ -471,8 +502,8 @@ class TFTPServer(object):
         notify.CallbackEngine.install(l, notification_callbacks)
 
     def serve_forever(self):
-        l.info("Serving TFTP requests in %s on port %d" %
-               (self.root, self.port))
+        l.info("Serving TFTP requests on %s:%d in %s" %
+               (self.iface, self.port, self.root))
         self.cleanup_thread.start()
         self.server.serve_forever()
 
@@ -480,7 +511,7 @@ class TFTPServer(object):
 def main():
     import optparse
 
-    usage = "Usage: %prog [options] <TFTP root>"
+    usage = "Usage: %prog [options] <iface> <TFTP root>"
     parser = optparse.OptionParser(usage=usage)
     parser.add_option("-r", "--rfc1350", dest="strict_rfc1350",
                       action="store_true", default=False,
@@ -496,11 +527,12 @@ def main():
                       const=logging.DEBUG, help="Output debugging information")
 
     (options, args) = parser.parse_args()
-    if len(args) != 1:
+    if len(args) != 2:
         parser.print_help()
         return 1
 
-    root = os.path.abspath(args[0])
+    iface = args[0]
+    root = os.path.abspath(args[1])
 
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
@@ -508,7 +540,7 @@ def main():
         format='%(levelname)s(%(name)s): %(message)s')
 
     try:
-        server = TFTPServer(root, options.port, options.strict_rfc1350)
+        server = TFTPServer(iface, root, options.port, options.strict_rfc1350)
         server.serve_forever();
     except TFTPServerConfigurationError, e:
         sys.stderr.write('TFTP server configuration error: %s!' %
