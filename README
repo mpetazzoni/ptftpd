@@ -28,7 +28,7 @@ distribution installation, you may need to specify the Python module
 search path with PYTHONPATH before executing the binaries:
 
   $ export PYTHONPATH=./python-path
-  $ bin/ptftp.py
+  $ bin/ptftp
   Connected to localhost:69.
 
   tftp>
@@ -43,17 +43,18 @@ transfer size option from RFC2349.
 
 For help on how to use pTFTPd, type:
 
-  $ ./bin/ptftpd.py --help
+  $ ./bin/ptftpd --help
 
 The port used can be changed using the -p option. The root path is given
-as a simple argument. For example, to serve /var/lib/tftp on port 6969:
+as a simple argument. For example, to serve /var/lib/tftp on port 6969 through
+the eth0 network interface:
 
-  $ ./bin/ptftpd.py -p 6969 /var/lib/tftp
+  $ ./bin/ptftpd -p 6969 eth0 /var/lib/tftp
 
 The TFTP client is an interactive client, just launch it and type 'help'
 to see the available commands:
 
-  $ ./bin/ptftp.py
+  $ ./bin/ptftp
   tftp> help
   ...
 
@@ -66,12 +67,12 @@ files, and the PXE boot filename. It will automatically start a TFTP
 server and a DHCP server to serve hosts on the given interface. See
 --help for more details:
 
-  $ ./bin/pxed.py --help
+  $ ./bin/pxed --help
 
 Mechanics for using pxed.py with the BOOTP server are not yet in place,
 but such a solution can easily be constructed manually by starting the
 BOOTP server and the TFTP server manually:
 
-  $ ./bin/bootpd.py <interface> <PXE boot file> &
-  $ ./bin/ptftpd.py
+  $ ./bin/bootpd <interface> <PXE boot file> &
+  $ ./bin/ptftpd <interface>
 
