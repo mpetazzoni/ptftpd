@@ -1,3 +1,10 @@
+ptftpd (1.0.2) unstable; urgency=low
+
+  * New upstream version 1.0.2.
+  * Have the TFTP server bind to a specific interface instead of all.
+
+ -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Tue, 25 Dec 2012 22:26:12 +0100
+
 ptftpd (1.0.1) unstable; urgency=low
 
   * New upstream version 1.0.1.

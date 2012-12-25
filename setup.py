@@ -35,7 +35,7 @@ complexe PXE solution based on the DHCP and TFTP servers.
 
     author = 'Maxime Petazzoni',
     author_email = 'maxime.petazzoni@bulix.org',
-    url = "https://ssl.bulix.org/svn/ptftpd/trunk/",
+    url = "https://github.com/mpetazzoni/ptftpd",
     license = "GPL",
 
     maintainer = 'Maxime Petazzoni',

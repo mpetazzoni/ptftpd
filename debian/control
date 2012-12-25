@@ -3,9 +3,9 @@ Section: net
 Priority: extra
 Maintainer: Maxime Petazzoni <maxime.petazzoni@bulix.org>
 Build-Depends: cdbs, debhelper (>= 7), python (>= 2.5), python-support
-Depends: ${misc:Depends}
 Standards-Version: 3.8.2
-Homepage: https://ssl.bulix.org/svn/ptftpd/trunk/
+Homepage: https://github.com/mpetazzoni/github
+Vcs-Git: git://github.com/mpetazzoni/ptftpd.git
 
 Package: python-ptftplib
 Architecture: all
