@@ -41,6 +41,8 @@ complexe PXE solution based on the DHCP and TFTP servers.
     maintainer = 'Maxime Petazzoni',
     maintainer_email = 'maxime.petazzoni@bulix.org',
 
+    install_requires=['netifaces'],
+
     packages = ['ptftplib'],
     scripts = ['bin/%s' % i for i in ["bootpd",
                                       "ptftpd",

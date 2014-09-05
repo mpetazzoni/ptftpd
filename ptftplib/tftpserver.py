@@ -33,6 +33,7 @@ from datetime import datetime
 from datetime import timedelta
 import errno
 import logging
+import netifaces
 import os
 import socket
 import SocketServer
@@ -52,34 +53,19 @@ _PTFTPD_SERVER_NAME = 'pFTPd'
 _PTFTPD_DEFAULT_PORT = 69
 _PTFTPD_DEFAULT_PATH = '/tftpboot'
 
-# Linux ioctl() commands to query the kernel.
-SIOCGIFADDR = 0x8915                  # IP address for interface
-SIOCGIFNETMASK = 0x891B               # Netmask for interface
-SIOCGIFHWADDR = 0x8927                # MAC address for interface
-
 def get_ip_config_for_interface(iface):
     """Retrieve and return the IP address/netmask and MAC address of the
     given interface."""
 
-    if 'linux' not in sys.platform:
-        raise NotImplementedError("get_ip_address_for_interface is not "
-                                  "implemented on your OS.")
+    if iface not in netifaces.interfaces():
+        raise TFTPServerConfigurationError(
+                'Unknown network interface {}'.format(iface))
 
-    def ip_from_response(resp):
-        return socket.inet_ntoa(resp[20:24])
+    details = netifaces.ifaddresses(iface)
+    inet = details[netifaces.AF_INET][0]
+    link = details[netifaces.AF_LINK][0]
 
-    def mac_from_response(resp):
-        mac = struct.unpack('!6B', resp[18:24])
-        return ':'.join(['%02x' % x for x in mac])
-
-    import fcntl
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    ifname = struct.pack('256s', iface[:15])
-    ip = fcntl.ioctl(s.fileno(), SIOCGIFADDR, ifname)
-    mask = fcntl.ioctl(s.fileno(), SIOCGIFNETMASK, ifname)
-    mac = fcntl.ioctl(s.fileno(), SIOCGIFHWADDR, ifname)
-    return ip_from_response(ip), ip_from_response(mask),\
-            mac_from_response(mac)
+    return inet['addr'], inet['netmask'], link['addr']
 
 class TFTPServerConfigurationError(Exception):
     """The configuration of the pTFTPd is incorrect."""
