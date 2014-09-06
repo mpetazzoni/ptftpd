@@ -60,6 +60,7 @@ class TFTPState:
                 (peer, op, path, filename, mode)
         self.filepath = os.path.abspath(os.path.join(self.path, self.filename))
 
+        self.tid = None                     # Transfer ID
         self.file = None                    # File object to read from or write to
         self.filesize = 0                   # File size in bytes
         self.state = None                   # Current transaction state
@@ -84,7 +85,7 @@ class TFTPState:
     def extra(self, state):
         """Build an extra information dictionnary we can pass to logging
         functions when necessary.
-        
+
         Args:
             state (notify state): a transfer state (see notify module).
 
@@ -93,6 +94,7 @@ class TFTPState:
         """
         return {'host': self.peer[0],
                 'port': self.peer[1],
+                'tid': self.tid,
                 'file': self.filename,
                 'state': state}
 
@@ -106,7 +108,7 @@ class TFTPState:
             pass
 
     def __str__(self):
-        s = "TFTPState/%s for %s\n" % (proto.TFTP_OPS[self.op], self.peer)
+        s = "TFTPState/%s for %s<%s>\n" % (proto.TFTP_OPS[self.op], self.peer, self.tid)
         s += "  filepath: %s\n" % self.filepath
         s += "  mode : %s\n" % self.mode
         s += "  state: %s\n" % self.state

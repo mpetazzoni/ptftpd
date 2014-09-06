@@ -230,16 +230,26 @@ class TFTPClient:
         # end of a succesfull transmission or an error
         while not self.PTFTP_STATE.done and not self.error:
             try:
-                request = self.sock.recv(recvsize)
+                (request, (_, rport)) = self.sock.recvfrom(recvsize)
                 if not len(request):
-                    request = self.sock.recv(recvsize)
+                    (request, (_, rport)) = self.sock.recvfrom(recvsize)
 
+                # Still nothing?
                 if not len(request):
                     self.error = (True, 'Communication error.')
                     return
             except socket.timeout:
                 self.error = (True, 'Connection timed out.')
                 return
+
+            if not self.PTFTP_STATE.tid:
+                self.PTFTP_STATE.tid = rport
+                print 'Communicating with {}:{}.'.format(self.peer[0], self.PTFTP_STATE.tid)
+
+            if self.PTFTP_STATE.tid != rport:
+                l.debug('Ignoring packet from {}:{}, we are connected to {}:{}.'
+                    .format(raddress, rport, raddress, self.peer[0], self.PTFTP_STATE.tid))
+                continue
 
             # Reset the response packet
             response = None
@@ -266,7 +276,7 @@ class TFTPClient:
 
             # Finally, send the response if we have one
             if response:
-                self.sock.sendto(response, self.peer)
+                self.sock.sendto(response, (self.peer[0], self.PTFTP_STATE.tid))
 
     def serveOACK(self, op, request):
         """
