@@ -19,6 +19,16 @@
 # along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
 from distutils.core import setup
+import sys
+
+try:
+    import netifaces
+except ImportError:
+    print """
+    'netifaces' is missing from your system, it's needed for pTFTPd to work.
+    If you are using Debian/Ubuntu, you need to install 'python-netifaces'
+    """
+    sys.exit(1)
 
 setup(name = "ptftpd",
     description = "pTFTPd, a pure-Python TFTP tool suite that works",
@@ -41,7 +51,7 @@ complexe PXE solution based on the DHCP and TFTP servers.
     maintainer = 'Maxime Petazzoni',
     maintainer_email = 'maxime.petazzoni@bulix.org',
 
-    install_requires=['netifaces'],
+    requires=['netifaces'],
 
     packages = ['ptftplib'],
     scripts = ['bin/%s' % i for i in ["bootpd",
