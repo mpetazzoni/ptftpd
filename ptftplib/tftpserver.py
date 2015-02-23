@@ -110,6 +110,12 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             self.wfile.write(response)
             self.wfile.flush()
 
+    def finish(self):
+        """ Workaround for following bug: http://bugs.python.org/issue1767511 """
+        wdata = self.wfile.getvalue()
+        if wdata:
+            self.socket.sendto(wdata, self.client_address)
+
     def finish_state(self, peer_state):
         self.server.clients[self.client_address] = peer_state
         return peer_state.next()
