@@ -133,10 +133,22 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         """
 
         try:
-            filename, mode, opts = proto.TFTPHelper.parseRRQ(request)
+            filenameOrig, mode, opts = proto.TFTPHelper.parseRRQ(request)
         except SyntaxError:
             # Ignore malformed RRQ requests
             return None
+
+        # we keep the filenameOrig for dynamic handler
+        # some clients request "\" and not "/" in their pathes
+        if os.name != 'nt':
+            filename = filenameOrig.replace('\\', '/')
+        else:
+            filename = filenameOrig.replace('/', '\\')
+
+        # absolute path requests are always relative to the tftp root directory
+        # if the client does something nasty we get it some lines down.
+        if filename and filename[0] == "/":
+            filename = filename[1:]
 
         peer_state = state.TFTPState(self.client_address, op,
                 self.server.root, filename, mode,
@@ -152,6 +164,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         try:
             # If the file exists, open it
+            # TODO: Windows clients request case insensitive, which may be a problem on *nix servers
             if os.path.isfile(peer_state.filepath) and\
                     os.access(peer_state.filepath, os.R_OK):
                         peer_state.file = open(peer_state.filepath, 'rb')
@@ -161,9 +174,10 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                 # if it is set
                 if hasattr(self, 'dynamic_file_handler') and\
                     self.dynamic_file_handler is not None:
-                        peer_state.file, peer_state.filesize = self.dynamic_file_handler(peer_state.filepath)
+                        # we send the original requested filename to the handler
+                        peer_state.file, peer_state.filesize = self.dynamic_file_handler(filenameOrig)
                 else:
-                    raise IOError('Cannot access file: %s' % peer_state.filepath)
+                    raise IOError('Cannot access file: %s' % filenameOrig)
 
             peer_state.packetnum = 0
             peer_state.state = state.STATE_SEND
