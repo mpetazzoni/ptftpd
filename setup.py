@@ -18,46 +18,38 @@
 # You should have received a copy of the GNU General Public License
 # along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
-from distutils.core import setup
-import sys
+from setuptools import setup, find_packages
 
-try:
-    import netifaces
-except ImportError:
-    print """
-    'netifaces' is missing from your system, it's needed for pTFTPd to work.
-    If you are using Debian/Ubuntu, you need to install 'python-netifaces'
-    """
-    sys.exit(1)
+from ptftplib.version import name, version
 
-setup(name = "ptftpd",
-    description = "pTFTPd, a pure-Python TFTP tool suite that works",
-    long_description = """
-pTFTPd is a pure-Python TFTP tool suite. It features a TFTP server and client
-fully compliant to the TFTP specification defined in RFC1350. It also supports
-the TFTP Option Extension protocol (per RFC2347), the block size option as
-defined in RFC2348 and the transfer size option from RFC2349.
+with open('README.rst') as readme:
+    long_description = readme.read()
 
-The pTFTPd tool suite also includes a mini-DHCP server, a BOOTP server, and a
-complexe PXE solution based on the DHCP and TFTP servers.
-""",
-    version = "1.0",
+with open('requirements.txt') as f:
+    requirements = [line.strip() for line in f.readlines()]
 
-    author = 'Maxime Petazzoni',
-    author_email = 'maxime.petazzoni@bulix.org',
-    url = "https://github.com/mpetazzoni/ptftpd",
-    license = "GPL",
-
-    maintainer = 'Maxime Petazzoni',
-    maintainer_email = 'maxime.petazzoni@bulix.org',
-
-    requires=['netifaces'],
-
-    packages = ['ptftplib'],
-    scripts = ['bin/%s' % i for i in ["bootpd",
-                                      "ptftpd",
-                                      "pxed",
-                                      "ptftp",
-                                      "dhcpd"]],
+setup(
+    name=name,
+    version=version,
+    author='Maxime Petazzoni',
+    author_email='maxime.petazzoni@bulix.org',
+    description='pTFTPd, a pure-Python TFTP tool suite that works',
+    license='GNU General Public License v2',
+    long_description=long_description,
+    zip_safe=True,
+    install_requires=requirements,
+    packages=find_packages(),
+    entry_points={
+        'console_scripts':
+            ['bootpd=ptftplib.bootpserver:main',
+             'dhcpd=ptftplib.dhcpserver:main',
+             'ptftp=ptftplib.tftpclient:main',
+             'ptftpd=ptftplib.tftpserver:main',
+             'pxed=ptftplib.pxeserver:main'],
+    },
+    classifiers=[
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+    ],
+    url='https://github.com/mpetazzoni/ptftpd',
 )
-
