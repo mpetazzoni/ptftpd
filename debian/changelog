@@ -1,3 +1,10 @@
+ptftpd (1.2) unstable; urgency=low
+
+  * New upstream version 1.2.
+  * Protocol state machine fix for WRQ request handling in TFTP server.
+
+ -- Maxime Petazzoni <maxime.petazzoni@bulix.org>  Tue, 11 Oct 2016 17:52:50 -0700
+
 ptftpd (1.0.2) unstable; urgency=low
 
   * New upstream version 1.0.2.
