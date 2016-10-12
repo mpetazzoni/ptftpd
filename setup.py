@@ -20,7 +20,8 @@
 
 from setuptools import setup, find_packages
 
-from ptftplib.version import name, version
+with open('ptftplib/version.py') as f:
+    exec(f.read())
 
 with open('README.rst') as readme:
     long_description = readme.read()
@@ -29,8 +30,8 @@ with open('requirements.txt') as f:
     requirements = [line.strip() for line in f.readlines()]
 
 setup(
-    name=name,
-    version=version,
+    name=name,  # noqa
+    version=version,  # noqa
     author='Maxime Petazzoni',
     author_email='maxime.petazzoni@bulix.org',
     description='pTFTPd, a pure-Python TFTP tool suite that works',

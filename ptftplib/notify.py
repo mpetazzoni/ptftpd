@@ -28,7 +28,6 @@ or more engines to the notification chain.
 """
 
 import logging
-import os
 import sys
 
 # Transfer states
@@ -41,6 +40,7 @@ _STATE_NAMES = {
         TRANSFER_COMPLETED: 'COMPLETED',
         TRANSFER_FAILED: 'FAILED',
 }
+
 
 class NullEngine(logging.Handler):
     """A no-op notification engine. Simply results in no logging messages being
@@ -77,7 +77,7 @@ class StreamEngine(logging.StreamHandler):
 
     @staticmethod
     def install(logger, stream=sys.stderr, loglevel=logging.WARNING,
-            format='%(message)s'):
+                format='%(message)s'):
         handler = StreamEngine(stream, loglevel, format)
         logger.addHandler(handler)
 
@@ -90,6 +90,7 @@ class DetailFilter(logging.Filter):
     def filter(self, record):
         r = record.__dict__
         return ('host' in r and 'port' in r and 'file' in r and 'state' in r)
+
 
 class DetailledStreamEngine(StreamEngine):
     """The DetailledStreamEngine is a extension of the StreamEngine define
@@ -110,10 +111,11 @@ class DetailledStreamEngine(StreamEngine):
 
     @staticmethod
     def install(logger, stream=sys.stderr, loglevel=logging.INFO,
-            format='%(message)s (%(host)s:%(port)d#%(file)s %(state)s)'):
+                format='%(message)s (%(host)s:%(port)d#%(file)s %(state)s)'):
         handler = DetailledStreamEngine(stream, loglevel, format)
         handler.addFilter(DetailFilter())
         logger.addHandler(handler)
+
 
 class CallbackEngine(logging.Handler):
     """The CallbackEngine is another notification engine, using a callback
@@ -152,6 +154,7 @@ class CallbackEngine(logging.Handler):
         handler.addFilter(DetailFilter())
         logger.addHandler(handler)
 
+
 def getLogger(name):
     """Return a named logger usable with the notification engines defined in
     this module. This logger is set with a loglevel of logging.DEBUG to make
@@ -162,4 +165,3 @@ def getLogger(name):
     l = logging.getLogger(name)
     l.setLevel(logging.DEBUG)
     return l
-

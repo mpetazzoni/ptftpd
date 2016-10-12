@@ -35,7 +35,6 @@ import random
 import socket
 import struct
 import sys
-import time
 
 l = logging.getLogger('bootpd')
 
@@ -82,12 +81,13 @@ SIOCGIFADDR = 0x8915                  # IP address for interface
 SIOCGIFNETMASK = 0x891B               # Netmask for interface
 SIOCGIFHWADDR = 0x8927                # MAC address for interface
 
-def get_ip_config_for_interface(iface):
+
+def get_ip_config_for_iface(iface):
     """Retrieve and return the IP address/netmask and MAC address of the
     given interface."""
 
     if 'linux' not in sys.platform:
-        raise NotImplementedError("get_ip_address_for_interface is not "
+        raise NotImplementedError("get_ip_address_for_iface is not "
                                   "implemented on your OS.")
 
     def ip_from_response(resp):
@@ -103,8 +103,9 @@ def get_ip_config_for_interface(iface):
     ip = fcntl.ioctl(s.fileno(), SIOCGIFADDR, ifname)
     mask = fcntl.ioctl(s.fileno(), SIOCGIFNETMASK, ifname)
     mac = fcntl.ioctl(s.fileno(), SIOCGIFHWADDR, ifname)
-    return ip_from_response(ip), ip_from_response(mask),\
-            mac_from_response(mac)
+    return ip_from_response(ip), ip_from_response(mask), \
+        mac_from_response(mac)
+
 
 def compute_checksum(message):
     """Calculates the 16-bit one's complement of the one's complement sum
@@ -126,24 +127,30 @@ def compute_checksum(message):
             checksum = (checksum & 0xFFFF) + 1
     return 0xFFFF - checksum
 
+
 def _pack_ip(ip_addr):
     """Pack a dotted quad IP string into a 4 byte string."""
     return socket.inet_aton(ip_addr)
 
+
 def _unpack_ip(ip_addr):
     """Unpack a 4 byte IP address into a dotted quad string."""
     return socket.inet_ntoa(ip_addr)
+
 
 def _pack_mac(mac_addr):
     """Pack a MAC address (00:00:00:00:00:00) into a 6 byte string."""
     fields = [int(x, 16) for x in mac_addr.split(':')]
     return struct.pack('!6B', *fields)
 
+
 class NotBootpPacketError(Exception):
     """Packet being decoded is not a BOOTP packet."""
 
+
 class UninterestingBootpPacket(Exception):
     """Packet is BOOTP, but we just don't care about it."""
+
 
 class BootpPacket(object):
     def __init__(self, pkt):
@@ -152,24 +159,24 @@ class BootpPacket(object):
             raise NotBootpPacketError()
         self.server_mac, self.client_mac = pkt[0:6], pkt[6:12]
 
-        # Strip off the ethernet frame and check the IP packet
-        # type. It should be UDP (0x11)
+        # Strip off the ethernet frame and check the IP packet type. It should
+        # be UDP (0x11)
         pkt = pkt[14:]
         if ord(pkt[9]) != IP_UDP_PROTO:
             raise NotBootpPacketError()
 
-        # Strip off the IP header and check the source/destination
-        # ports in the UDP datagram. The packet should be from port 68
-        # to port 67 to be BOOTP. We don't care about checksum here
+        # Strip off the IP header and check the source/destination ports in the
+        # UDP datagram. The packet should be from port 68 to port 67 to be
+        # BOOTP. We don't care about checksum here
         header_len = (ord(pkt[0]) & 0xF) * 4
         pkt = pkt[header_len:]
         (src, dst) = struct.unpack('!2H4x', pkt[:8])
         if not (src == 68 and dst == 67):
             raise NotBootpPacketError()
 
-        # Looks like a BOOTP request. Strip off the UDP headers, 
-        # parse out the interesting data from the base BOOTP packet 
-        # and check that the magic cookie is right.
+        # Looks like a BOOTP request. Strip off the UDP headers, parse out the
+        # interesting data from the base BOOTP packet and check that the magic
+        # cookie is right.
         pkt = pkt[8:]
         bootp_fmt = '!4xL20x6s10x64s128xL'
         bootp_size = struct.calcsize(bootp_fmt)
@@ -188,10 +195,11 @@ class BootpPacket(object):
 
         self.xid = xid
 
+
 class BOOTPServer(object):
     def __init__(self, interface, bootfile, router=None, tftp_server=None):
         self.interface = interface
-        self.ip, self.netmask, self.mac = get_ip_config_for_interface(interface)
+        self.ip, self.netmask, self.mac = get_ip_config_for_iface(interface)
         self.hostname = socket.gethostname()
         self.bootfile = bootfile
         self.router = router or self.ip
@@ -209,7 +217,7 @@ class BOOTPServer(object):
                 pkt = BootpPacket(data)
                 self.handle_bootp_request(pkt)
             except (NotBootpPacketError, UninterestingBootpPacket):
-                continue;
+                continue
 
     def handle_bootp_request(self, pkt):
         # If the server is explicitly requested, and it's not ours,
@@ -240,8 +248,8 @@ class BOOTPServer(object):
                             '10x'   # End of MAC Address
                             '64s'   # Server host name, often useless
                             '128s'  # PXE boot file
-                            'L'     # Magic cookie
-                            , 0x2, 0x1, 0x6, request_pkt.xid, 0x8000,
+                            'L',    # Magic cookie
+                            0x2, 0x1, 0x6, request_pkt.xid, 0x8000,
                             _pack_ip(client_ip), _pack_ip(self.tftp_server),
                             request_pkt.client_mac, self.hostname,
                             self.bootfile, BOOTP_MAGIC_COOKIE)
@@ -278,7 +286,7 @@ class BOOTPServer(object):
         ip_header1 = struct.pack('!BxH4xBB', 0x45, 20+len(reply), 0xFF,
                                  IP_UDP_PROTO)
         ip_header2 = struct.pack('4s4s', _pack_ip(self.ip),
-                                _pack_ip('255.255.255.255'))
+                                 _pack_ip('255.255.255.255'))
         checksum = compute_checksum(ip_header1 + ip_header2)
 
         reply = ip_header1 + struct.pack('!H', checksum) + ip_header2 + reply
@@ -301,12 +309,11 @@ class BOOTPServer(object):
 
             client_ip = (server_ip & netmask) | (entropy & anti_netmask)
 
-            # Exclude using the server's address, the network's
-            # address, the broadcast address, and any IP already in
-            # use.
+            # Exclude using the server's address, the network's address, the
+            # broadcast address, and any IP already in use.
             if (client_ip == server_ip or
-                (client_ip & netmask) == 0 or
-                (client_ip | netmask) == 0xFFFFFFFF):
+                    (client_ip & netmask) == 0 or
+                    (client_ip | netmask) == 0xFFFFFFFF):
                 continue
 
             ip = _unpack_ip(struct.pack('!L', client_ip))
@@ -314,6 +321,7 @@ class BOOTPServer(object):
                 continue
 
             return ip
+
 
 def main():
     import optparse

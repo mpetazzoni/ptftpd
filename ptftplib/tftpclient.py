@@ -32,19 +32,16 @@ interval option from RFC2349.
 """
 
 from datetime import datetime
-from datetime import timedelta
-import errno
 import os
 import shutil
 import socket
 import stat
 import sys
 import tempfile
-import time
 
-import notify
-import proto
-import state
+from . import notify
+from . import proto
+from . import state
 
 l = notify.getLogger('tftp')
 
@@ -63,6 +60,7 @@ _PTFTP_RFC1350_OPTS = {
     proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE,
 }
 
+
 class TFTPClient:
     """
     A small and simple TFTP client to pull/push files from a TFTP server.
@@ -76,7 +74,8 @@ class TFTPClient:
         Initializes the TFTP client.
 
         Args:
-            peer (tuple): a (host, port) tuple describing the server to connect to.
+            peer (tuple): a (host, port) tuple describing the server to connect
+                to.
             opts (dict): a dictionnary of TFTP option values to use,
                 or None to disable them (defaults to None).
             mode (string): the transfer mode to use by default, must be one of
@@ -94,13 +93,13 @@ class TFTPClient:
 
         if rfc1350:
             self.opts = _PTFTP_RFC1350_OPTS
-            print 'Running in RFC1350 compliance mode.'
+            print('Running in RFC1350 compliance mode.')
         else:
             if not self.opts:
                 self.opts = _PTFTP_DEFAULT_OPTS
 
             # This one is mandatory
-            if not self.opts.has_key(proto.TFTP_OPTION_BLKSIZE):
+            if proto.TFTP_OPTION_BLKSIZE not in self.opts:
                 self.opts[proto.TFTP_OPTION_BLKSIZE] = \
                         _PTFTP_DEFAULT_OPTS[proto.TFTP_OPTION_BLKSIZE]
 
@@ -118,7 +117,7 @@ class TFTPClient:
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(state.STATE_TIMEOUT_SECS)
-        print "Connected to %s:%d." % (self.peer[0], self.peer[1])
+        print('Connected to {}:{}.'.format(self.peer[0], self.peer[1]))
 
     def finish(self):
         """
@@ -165,7 +164,7 @@ class TFTPClient:
             elif cmd_parts[0] in ('b', 'blksize'):
                 self.blksize(cmd_parts[1:])
             else:
-                print 'Unrecognized command. Try help.'
+                print('Unrecognized command. Try help.')
 
         self.finish()
 
@@ -189,20 +188,6 @@ class TFTPClient:
         print 'p  put <filename>        Push <filename> to the server'
         print
 
-    def __receive_packet(self):
-        """
-        Receive a single UDP packet from the server.
-
-        Args:
-          None.
-        Returns:
-          A tuple (opcode, packet data) if the packet was received succesfully
-          and valid, False otherwise.
-        """
-
-
-        return opcode, request
-
     def handle(self):
         """
         Handle an incoming TFTP packet and dispatch it to one of the
@@ -225,14 +210,13 @@ class TFTPClient:
         if self.opts[proto.TFTP_OPTION_BLKSIZE] > recvsize:
             recvsize = self.opts[proto.TFTP_OPTION_BLKSIZE] + 4
 
-
         # Process incoming packet until the state is cleared by the
         # end of a succesfull transmission or an error
         while not self.PTFTP_STATE.done and not self.error:
             try:
-                (request, (_, rport)) = self.sock.recvfrom(recvsize)
+                (request, (raddress, rport)) = self.sock.recvfrom(recvsize)
                 if not len(request):
-                    (request, (_, rport)) = self.sock.recvfrom(recvsize)
+                    (request, (raddress, rport)) = self.sock.recvfrom(recvsize)
 
                 # Still nothing?
                 if not len(request):
@@ -244,11 +228,14 @@ class TFTPClient:
 
             if not self.PTFTP_STATE.tid:
                 self.PTFTP_STATE.tid = rport
-                print 'Communicating with {}:{}.'.format(self.peer[0], self.PTFTP_STATE.tid)
+                print('Communicating with {}:{}.'
+                      .format(self.peer[0], self.PTFTP_STATE.tid))
 
             if self.PTFTP_STATE.tid != rport:
-                l.debug('Ignoring packet from {}:{}, we are connected to {}:{}.'
-                    .format(raddress, rport, raddress, self.peer[0], self.PTFTP_STATE.tid))
+                l.debug(
+                    'Ignoring packet from {}:{}, we are connected to {}:{}.'
+                    .format(raddress, rport, raddress, self.peer[0],
+                            self.PTFTP_STATE.tid))
                 continue
 
             # Reset the response packet
@@ -259,8 +246,9 @@ class TFTPClient:
             if not opcode:
                 self.error = (True, None)
                 response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
-            elif not proto.TFTP_OPS.has_key(opcode):
-                self.error = (True, "Unknown or unsupported operation %d!" % opcode)
+            elif opcode not in proto.TFTP_OPS:
+                self.error = (True,
+                              "Unknown or unsupported operation %d!" % opcode)
                 response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
                 return
             else:
@@ -268,19 +256,20 @@ class TFTPClient:
                     handler = getattr(self, "serve%s" % proto.TFTP_OPS[opcode])
                 except AttributeError:
                     self.error = (True, 'Operation not supported.')
-                    response = proto.TFTPHelper.createERROR(proto.ERROR_UNDEF,
-                                                            'Operation not supported.')
+                    response = proto.TFTPHelper.createERROR(
+                            proto.ERROR_UNDEF, 'Operation not supported.')
 
                 if not response:
                     response = handler(opcode, request[2:])
 
             # Finally, send the response if we have one
             if response:
-                self.sock.sendto(response, (self.peer[0], self.PTFTP_STATE.tid))
+                self.sock.sendto(response,
+                                 (self.peer[0], self.PTFTP_STATE.tid))
 
     def serveOACK(self, op, request):
         """
-		Serves OACK packets.
+        Serves OACK packets.
 
         Args:
           op (integer): the TFTP opcode.
@@ -312,13 +301,13 @@ class TFTPClient:
             self.PTFTP_STATE.error = proto.ERROR_OPTION_NEGOCIATION
 
         if self.PTFTP_STATE.state == state.STATE_RECV:
-            self.PTFTP_STATE.state = state.STATE_RECV_OACK
+            self.PTFTP_STATE.state = state.STATE_RECV_ACK
 
         return self.PTFTP_STATE.next()
 
     def serveACK(self, op, request):
         """
-		Serves ACK packets.
+        Serves ACK packets.
 
         Args:
           op (integer): the TFTP opcode.
@@ -339,12 +328,13 @@ class TFTPClient:
 
         if self.PTFTP_STATE.state == state.STATE_SEND:
             if self.PTFTP_STATE.packetnum != num:
-                self.error = (True, 'Got ACK with incoherent data packet number.')
+                self.error = (True,
+                              'Got ACK with incoherent data packet number.')
                 self.PTFTP_STATE.state = state.STATE_ERROR
                 self.PTFTP_STATE.error = proto.ERROR_ILLEGAL_OP
 
             if not self.rfc1350 and num >= proto.TFTP_PACKETNUM_MAX-1:
-                print 'Packet number wraparound.'
+                print('Packet number wraparound.')
 
             return self.PTFTP_STATE.next()
 
@@ -352,7 +342,7 @@ class TFTPClient:
             self.PTFTP_STATE.done = True
             return None
 
-        print 'ERROR: Unexpected ACK!'
+        print('ERROR: Unexpected ACK!')
         self.error = (True, None)
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
@@ -389,13 +379,13 @@ class TFTPClient:
             else:
                 self.PTFTP_STATE.data = data
 
-            if (not self.PTFTP_STATE.done and not self.rfc1350 and
-                num >= proto.TFTP_PACKETNUM_MAX-1):
-                print 'Packet number wraparound.'
+            if not self.PTFTP_STATE.done and not self.rfc1350 and \
+                    num >= proto.TFTP_PACKETNUM_MAX - 1:
+                print('Packet number wraparound.')
 
             return self.PTFTP_STATE.next()
 
-        print 'ERROR: Unexpected DATA!'
+        print('ERROR: Unexpected DATA!')
         self.error = (True, None)
         return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
@@ -435,7 +425,7 @@ class TFTPClient:
         """
 
         if len(args) < 1 or len(args) > 2:
-            print 'Usage: get [-f] <filename>'
+            print('Usage: get [-f] <filename>')
             return False
 
         filepath = args[0]
@@ -452,14 +442,15 @@ class TFTPClient:
         if not overwrite:
             try:
                 open(filename)
-                print "Error: local file %s already exists!" % filename
-                print 'Use get -f to overwrite the local file.'
+                print('Error: local file {} already exists!'.format(filename))
+                print('Use get -f to overwrite the local file.')
                 return False
             except IOError:
                 pass
 
         self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_RRQ,
-                '', filepath, self.transfer_mode, not self.rfc1350)
+                                           '', filepath, self.transfer_mode,
+                                           not self.rfc1350)
 
         # Then, before sending anything to the server, open the file
         # for writing
@@ -471,9 +462,9 @@ class TFTPClient:
             self.PTFTP_STATE.packetnum = 1
             self.PTFTP_STATE.state = state.STATE_RECV
         except IOError, e:
-            print 'Error:', os.strerror(e.errno)
-            print "Can't write to temporary file %s!" % \
-                self.PTFTP_STATE.file.name
+            print('Error: {}'.format(os.strerror(e.errno)))
+            print('Can\'t write to temporary file {}!'
+                  .format(self.PTFTP_STATE.file.name))
             return False
 
         opts = dict(self.opts)
@@ -483,7 +474,6 @@ class TFTPClient:
         # file size back in the OACK.
         if not self.rfc1350:
             opts[proto.TFTP_OPTION_TSIZE] = 0
-
 
         # Everything's OK, let's go
         print "Retrieving '%s' from the remote host..." % filename
@@ -498,7 +488,7 @@ class TFTPClient:
         if self.error:
             error, errmsg = self.error
             if error and errmsg:
-                print 'Error:', errmsg
+                print('Error: {}'.format(errmsg))
             # Remove the temporary file on error. The destionation file,
             # if it already existed, is left untouched.
             self.PTFTP_STATE.file.close()
@@ -509,13 +499,15 @@ class TFTPClient:
         try:
             shutil.copy(self.PTFTP_STATE.file.name, filename)
         except IOError, e:
-            print 'Error:', os.strerror(e.errno)
-            print "Can't copy temporary file to local file %s!" % filename
+            print('Error: {}'.format(os.strerror(e.errno)))
+            print('Can\'t copy temporary file to local file {}!'
+                  .format(filename))
             return False
 
-        print ("Transfer complete, %d bytes (%.2f kB/s)" %
-               (self.PTFTP_STATE.filesize,
-                self.__get_speed(self.PTFTP_STATE.filesize, transfer_time)))
+        print('Transfer complete, {} bytes ({:.2f} kB/s)'
+              .format(self.PTFTP_STATE.filesize,
+                      self.__get_speed(self.PTFTP_STATE.filesize,
+                                       transfer_time)))
         self.PTFTP_STATE.file.close()
         os.remove(self.PTFTP_STATE.file.name)
         return True
@@ -531,14 +523,14 @@ class TFTPClient:
         """
 
         if len(args) != 1:
-            print 'Usage: put <filename>'
+            print('Usage: put <filename>')
             return
 
         filepath = args[0]
-        filename = os.path.split(filepath)
 
         self.PTFTP_STATE = state.TFTPState(self.peer, proto.OP_WRQ,
-                '', filepath, self.transfer_mode, not self.rfc1350)
+                                           '', filepath, self.transfer_mode,
+                                           not self.rfc1350)
 
         try:
             self.PTFTP_STATE.file = open(filepath, 'rb')
@@ -546,8 +538,8 @@ class TFTPClient:
             self.PTFTP_STATE.packetnum = 0
             self.PTFTP_STATE.state = state.STATE_SEND
         except IOError, e:
-            print 'Error:', os.strerror(e.errno)
-            print "Can't read from local file %s!" % filepath
+            print('Error: {}'.format(os.strerror(e.errno)))
+            print('Can\'t read from local file {}!'.format(filepath))
             return False
 
         opts = dict(self.opts)
@@ -557,7 +549,6 @@ class TFTPClient:
         # transfered file size to the server.
         if not self.rfc1350:
             opts[proto.TFTP_OPTION_TSIZE] = self.PTFTP_STATE.filesize
-
 
         # Everything's OK, let's go
         print "Pushing '%s' to the remote host..." % filepath
@@ -572,47 +563,54 @@ class TFTPClient:
         if self.error:
             error, errmsg = self.error
             if error and errmsg:
-                print 'Error:', errmsg
+                print('Error: {}'.format(errmsg))
             return False
 
-        print ("Transfer complete, %d bytes (%.2f kB/s)" %
-               (self.PTFTP_STATE.filesize,
-                self.__get_speed(self.PTFTP_STATE.filesize, transfer_time)))
+        print('Transfer complete, {} bytes ({:.2f} kB/s)'
+              .format(self.PTFTP_STATE.filesize,
+                      self.__get_speed(self.PTFTP_STATE.filesize,
+                                       transfer_time)))
         return True
 
     def mode(self, args):
         if len(args) > 1:
-            print 'Usage: mode [newmode]'
+            print('Usage: mode [newmode]')
             return
 
         if not len(args):
-            print "Current transfer mode: %s." % self.transfer_mode
-            print 'Available transfer modes:', ', '.join(proto.TFTP_MODES)
+            print('Current transfer mode: {}.'.format(self.transfer_mode))
+            print('Available transfer modes: {}'
+                  .format(', '.join(proto.TFTP_MODES)))
             return
 
         if args[0].lower() in proto.TFTP_MODES:
             self.transfer_mode = args[0].lower()
-            print "Mode set to %s." % self.transfer_mode
+            print('Mode set to {}.'.format(self.transfer_mode))
         else:
-            print 'Unknown transfer mode, use one of:', ', '.join(proto.TFTP_MODES)
+            print('Unknown transfer mode, use one of: {}'
+                  .format(', '.join(proto.TFTP_MODES)))
 
     def blksize(self, args):
         if len(args) > 1:
-            print 'Usage: blksize [newsize]'
+            print('Usage: blksize [newsize]')
             return
 
         if not len(args):
-            print "Current block size: %d byte(s)." % self.opts[proto.TFTP_OPTION_BLKSIZE]
+            print('Current block size: {} byte(s).'
+                  .format(self.opts[proto.TFTP_OPTION_BLKSIZE]))
             return
 
         try:
             self.opts[proto.TFTP_OPTION_BLKSIZE] = int(args[0])
-            print "Block size set to %d byte(s)." % self.opts[proto.TFTP_OPTION_BLKSIZE]
+            print('Block size set to {} byte(s).'
+                  .format(self.opts[proto.TFTP_OPTION_BLKSIZE]))
         except ValueError:
-            print 'Block size must be a number!'
+            print('Block size must be a number!')
 
     def __get_speed(self, filesize, time):
-        return filesize / 1024.0 / (time.seconds + time.microseconds / 1000000.0)
+        return (filesize / 1024.0 /
+                (time.seconds + time.microseconds / 1000000.0))
+
 
 def usage():
     print "usage: %s [options]" % sys.argv[0]
@@ -661,26 +659,27 @@ def main():
             try:
                 port = int(val)
             except ValueError:
-                print 'Port must be a number!'
+                print('Port must be a number!')
                 return 2
         if opt in ('-b', '--blksize'):
             try:
                 exts[proto.TFTP_OPTION_BLKSIZE] = int(val)
             except ValueError:
-                print 'Block size must be a number!'
+                print('Block size must be a number!')
                 return 2
         if opt in ('-m', '--mode'):
             if val in proto.TFTP_MODES:
                 mode = val
             else:
-                print 'Transfer mode must be one of:', ', '.join(proto.TFTP_MODES)
+                print('Transfer mode must be one of: {}'
+                      .format(', '.join(proto.TFTP_MODES)))
                 return 2
         if opt in ('-r', '--rfc1350'):
             rfc1350 = True
 
     client = TFTPClient((host, port), exts, mode, rfc1350)
     client.serve_forever()
-    print 'Goodbye.'
+    print('Goodbye.')
     return 0
 
 if __name__ == '__main__':
@@ -688,4 +687,3 @@ if __name__ == '__main__':
         sys.exit(main())
     except KeyboardInterrupt:
         pass
-

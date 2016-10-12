@@ -19,19 +19,18 @@
 from datetime import datetime
 import errno
 import os
-import re
-import stat
 
-import proto
+from . import proto
 
 STATE_SEND = 1
 STATE_SEND_OACK = 2
 STATE_SEND_LAST = 4
 STATE_RECV = 8
-STATE_RECV_OACK = 16
+STATE_RECV_ACK = 16
 STATE_ERROR = 32
 
 STATE_TIMEOUT_SECS = 10
+
 
 class TFTPState:
     """
@@ -57,19 +56,21 @@ class TFTPState:
         """
 
         (self.peer, self.op, self.path, self.filename, self.mode) = \
-                (peer, op, path, filename, mode)
+            (peer, op, path, filename, mode)
         self.filepath = os.path.abspath(os.path.join(self.path, self.filename))
 
         self.tid = None                     # Transfer ID
-        self.file = None                    # File object to read from or write to
+        self.file = None                    # File object to read from or
+                                            # write to
         self.filesize = 0                   # File size in bytes
         self.state = None                   # Current transaction state
                                             # (send/recv/last/error)
         self.done = False                   # Transaction complete flag
 
         # Option defaults
-        self.opts = { proto.TFTP_OPTION_BLKSIZE:
-                        proto.TFTP_DEFAULT_PACKET_SIZE }
+        self.opts = {
+            proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE
+        }
 
         self.last_seen = datetime.today()
 
@@ -108,7 +109,9 @@ class TFTPState:
             pass
 
     def __str__(self):
-        s = "TFTPState/%s for %s<%s>\n" % (proto.TFTP_OPS[self.op], self.peer, self.tid)
+        s = "TFTPState/%s for %s<%s>\n" % (proto.TFTP_OPS[self.op],
+                                           self.peer,
+                                           self.tid)
         s += "  filepath: %s\n" % self.filepath
         s += "  mode : %s\n" % self.mode
         s += "  state: %s\n" % self.state
@@ -149,7 +152,7 @@ class TFTPState:
         if not opts:
             return
 
-        if opts.has_key(proto.TFTP_OPTION_TSIZE) and opts[proto.TFTP_OPTION_TSIZE] == 0:
+        if opts.get(proto.TFTP_OPTION_TSIZE) == 0:
             opts[proto.TFTP_OPTION_TSIZE] = self.filesize
 
         self.opts = opts
@@ -167,31 +170,18 @@ class TFTPState:
 
         self.ping()
 
-        if self.state == STATE_SEND_OACK:
-            return self.__next_send_oack()
-        elif self.state == STATE_RECV_OACK:
-            return self.__next_recv_oack()
-        elif self.state == STATE_SEND:
+        if self.state == STATE_SEND:
             return self.__next_send()
+        elif self.state == STATE_SEND_OACK:
+            return self.__next_send_oack()
         elif self.state == STATE_RECV:
             return self.__next_recv()
+        elif self.state == STATE_RECV_ACK:
+            return self.__next_recv_ack()
         elif self.state == STATE_ERROR:
             return self.__next_error()
 
         return None
-
-    def __next_send_oack(self):
-        if self.op == proto.OP_RRQ:
-            self.state = STATE_SEND
-        else:
-            self.state = STATE_RECV
-
-        return proto.TFTPHelper.createOACK(self.opts)
-
-    def __next_recv_oack(self):
-        self.state = STATE_RECV
-
-        return proto.TFTPHelper.createACK(0)
 
     def __next_send(self):
         blksize = self.opts[proto.TFTP_OPTION_BLKSIZE]
@@ -221,6 +211,14 @@ class TFTPState:
 
         return proto.TFTPHelper.createDATA(self.packetnum, self.data)
 
+    def __next_send_oack(self):
+        self.state = STATE_SEND if self.op == proto.OP_RRQ else STATE_RECV
+        return proto.TFTPHelper.createOACK(self.opts)
+
+    def __next_recv_ack(self):
+        self.state = STATE_RECV
+        return proto.TFTPHelper.createACK(0)
+
     def __next_recv(self):
         # Convert CRLF to LF if needed
         if self.mode == 'netascii':
@@ -238,7 +236,8 @@ class TFTPState:
             if e.errno == errno.ENOSPC:
                 return proto.TFTPHelper.createERROR(proto.ERROR_DISK_FULL)
             else:
-                print 'Undefined error occured: %s!' % errno.errorcode[e.errno]
+                print('Undefined error occured: {}!'
+                      .format(errno.errorcode[e.errno]))
                 return proto.TFTPHelper.createERROR(proto.ERROR_UNDEF)
 
         if self.done:

@@ -19,7 +19,8 @@
 import re
 import struct
 
-import notify
+from . import notify
+
 l = notify.getLogger('tftp-proto')
 notify.NullEngine.install(l)
 
@@ -110,6 +111,7 @@ TFTP_BLKSIZE_MAX = 65464
 
 TFTP_TIMEOUT_MIN = 1
 TFTP_TIMEOUT_MAX = 255
+
 
 class TFTPHelper:
     """
@@ -356,7 +358,8 @@ class TFTPHelper:
             num = packet[0]
             data = request[2:]
 
-            l.debug("  <  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, len(data)))
+            l.debug("  <  %s: #%d (%d bytes)" %
+                    (TFTP_OPS[OP_DATA], num, len(data)))
             return num, data
         except struct.error:
             raise SyntaxError()
@@ -430,7 +433,7 @@ class TFTPHelper:
 
         used = {}
 
-        if opts.has_key(TFTP_OPTION_BLKSIZE):
+        if TFTP_OPTION_BLKSIZE in opts:
             blksize = int(opts[TFTP_OPTION_BLKSIZE])
             if blksize >= TFTP_BLKSIZE_MIN and blksize <= TFTP_BLKSIZE_MAX:
                 used[TFTP_OPTION_BLKSIZE] = blksize
@@ -439,14 +442,14 @@ class TFTPHelper:
         else:
             used[TFTP_OPTION_BLKSIZE] = TFTP_DEFAULT_PACKET_SIZE
 
-        if opts.has_key(TFTP_OPTION_TIMEOUT):
+        if TFTP_OPTION_TIMEOUT in opts:
             timeout = int(opts[TFTP_OPTION_TIMEOUT])
             if timeout >= TFTP_TIMEOUT_MIN and timeout <= TFTP_TIMEOUT_MAX:
                 used[TFTP_OPTION_TIMEOUT] = timeout
             else:
                 return None
 
-        if opts.has_key(TFTP_OPTION_TSIZE):
+        if TFTP_OPTION_TSIZE in opts:
             used[TFTP_OPTION_TSIZE] = int(opts[TFTP_OPTION_TSIZE])
 
         return used

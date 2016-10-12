@@ -38,14 +38,13 @@ import os
 import socket
 import SocketServer
 import stat
-import struct
 import sys
 import threading
 import time
 
-import notify
-import proto
-import state
+from . import notify
+from . import proto
+from . import state
 
 l = notify.getLogger('tftpd')
 
@@ -53,7 +52,8 @@ _PTFTPD_SERVER_NAME = 'pFTPd'
 _PTFTPD_DEFAULT_PORT = 69
 _PTFTPD_DEFAULT_PATH = '/tftpboot'
 
-def get_ip_config_for_interface(iface):
+
+def get_ip_config_for_iface(iface):
     """Retrieve and return the IP address/netmask and MAC address of the
     given interface."""
 
@@ -67,8 +67,10 @@ def get_ip_config_for_interface(iface):
 
     return inet['addr'], inet['netmask'], link['addr']
 
+
 class TFTPServerConfigurationError(Exception):
     """The configuration of the pTFTPd is incorrect."""
+
 
 class TFTPServerHandler(SocketServer.DatagramRequestHandler):
     """
@@ -91,8 +93,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             l.error("Can't find packet opcode, packet ignored")
             return
 
-        if not proto.TFTP_OPS.has_key(opcode):
-            l.error("Unknown operation %d" % opn)
+        if opcode not in proto.TFTP_OPS:
+            l.error("Unknown operation %d" % opcode)
             response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
             self.wfile.write(response)
             self.wfile.flush()
@@ -101,9 +103,10 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
         try:
             handler = getattr(self, "serve%s" % proto.TFTP_OPS[opcode])
         except AttributeError:
-            l.error("Unsupported operation %s" % op)
-            response = proto.TFTPHelper.createERROR(proto.ERROR_UNDEF,
-                'Operation not supported by server.')
+            l.error("Unsupported operation %s" % opcode)
+            response = proto.TFTPHelper.createERROR(
+                    proto.ERROR_UNDEF,
+                    'Operation not supported by server.')
 
         response = handler(opcode, request[2:])
         if response:
@@ -133,15 +136,15 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         peer_state = state.TFTPState(self.client_address, op,
-                self.server.root, filename, mode,
-                not self.server.strict_rfc1350)
+                                     self.server.root, filename, mode,
+                                     not self.server.strict_rfc1350)
 
         if not peer_state.filepath.startswith(self.server.root):
             peer_state.state = state.STATE_ERROR
             peer_state.error = proto.ERROR_ACCESS_VIOLATION
 
             l.warning('Out-of-jail path requested: %s!' % filename,
-                    extra=peer_state.extra(notify.TRANSFER_FAILED))
+                      extra=peer_state.extra(notify.TRANSFER_FAILED))
             return self.finish_state(peer_state)
 
         try:
@@ -151,8 +154,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             peer_state.state = state.STATE_SEND
 
             l.info('Serving file %s to host %s...' %
-                    (filename, self.client_address[0]),
-                    extra=peer_state.extra(notify.TRANSFER_STARTED))
+                   (filename, self.client_address[0]),
+                   extra=peer_state.extra(notify.TRANSFER_STARTED))
 
             # Only set options if not running in RFC1350 compliance mode
             # and when option were received.
@@ -206,8 +209,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             return None
 
         peer_state = state.TFTPState(self.client_address, op,
-                self.server.root, filename, mode,
-                not self.server.strict_rfc1350)
+                                     self.server.root, filename, mode,
+                                     not self.server.strict_rfc1350)
 
         if not peer_state.filepath.startswith(self.server.root):
             peer_state.state = state.STATE_ERROR
@@ -235,9 +238,9 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                 try:
                     peer_state.file = open(peer_state.filepath, 'wb')
                     peer_state.packetnum = 0
-                    peer_state.state = state.STATE_RECV
+                    peer_state.state = state.STATE_RECV_ACK
                     l.info('Upload of %s began.' % filename,
-                            extra=peer_state.extra(notify.TRANSFER_STARTED))
+                           extra=peer_state.extra(notify.TRANSFER_STARTED))
                 except IOError:
                     peer_state.state = state.STATE_ERROR
                     peer_state.error = proto.ERROR_ACCESS_VIOLATION
@@ -312,8 +315,8 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                         'Aborting transfer.',
                         extra=peer_state.extra(notify.TRANSFER_FAILED))
 
-            if (not self.server.strict_rfc1350 and
-                num == proto.TFTP_PACKETNUM_MAX-1):
+            if not self.server.strict_rfc1350 and \
+                    num == proto.TFTP_PACKETNUM_MAX - 1:
                 l.debug('Packet number wraparound.')
 
             return peer_state.next()
@@ -332,7 +335,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             l.debug("  <   ACK: Transfer complete, %d byte(s)."
                     % peer_state.filesize)
             l.info('Transfer of file %s completed.' % peer_state.filename,
-                    extra=peer_state.extra(notify.TRANSFER_COMPLETED))
+                   extra=peer_state.extra(notify.TRANSFER_COMPLETED))
             del self.server.clients[self.client_address]
             return None
 
@@ -369,7 +372,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
 
         if len(data) > peer_state.opts[proto.TFTP_OPTION_BLKSIZE]:
             l.warning('Illegal TFTP option received.',
-                      extra=peer_state.extra(TRANSFER_FAILED))
+                      extra=peer_state.extra(notify.TRANSFER_FAILED))
             return proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
 
         if peer_state.state == state.STATE_RECV:
@@ -422,17 +425,17 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
             # Ignore malformed ERROR packets
             return None
 
+        if self.client_address not in self.server.clients:
+            return None
+
         # An error packet immediately terminates a connection
-        if self.server.clients.has_key(self.client_address):
-            peer_state = self.server.clients[self.client_address]
+        peer_state = self.server.clients[self.client_address]
 
-            l.warning('Error packet received!',
-                      extra=peer_state.extra(notify.TRANSFER_FAILED))
-            if peer_state.op == proto.OP_WRQ:
-                peer_state.purge()
-            del self.server.clients[self.client_address]
-
-        return None
+        l.warning('Error packet received!',
+                  extra=peer_state.extra(notify.TRANSFER_FAILED))
+        if peer_state.op == proto.OP_WRQ:
+            peer_state.purge()
+        del self.server.clients[self.client_address]
 
 
 class TFTPServerGarbageCollector(threading.Thread):
@@ -466,6 +469,7 @@ class TFTPServerGarbageCollector(threading.Thread):
                 l.debug('Removed stale peer %s:%d.' % peer)
                 del self.clients[peer]
 
+
 class TFTPServer(object):
     def __init__(self, iface, root, port=_PTFTPD_DEFAULT_PORT,
                  strict_rfc1350=False, notification_callbacks={}):
@@ -477,8 +481,9 @@ class TFTPServer(object):
             raise TFTPServerConfigurationError(
                 "The specified TFTP root does not exist")
 
-        self.ip, self.netmask, self.mac = get_ip_config_for_interface(self.iface)
-        self.server = SocketServer.UDPServer((self.ip, port), TFTPServerHandler)
+        self.ip, self.netmask, self.mac = get_ip_config_for_iface(self.iface)
+        self.server = SocketServer.UDPServer((self.ip, port),
+                                             TFTPServerHandler)
         self.server.root = self.root
         self.server.strict_rfc1350 = self.strict_rfc1350
         self.server.clients = self.client_registry
@@ -522,12 +527,12 @@ def main():
 
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
-        loglevel=options.loglevel,
-        format='%(levelname)s(%(name)s): %(message)s')
+                                loglevel=options.loglevel,
+                                format='%(levelname)s(%(name)s): %(message)s')
 
     try:
         server = TFTPServer(iface, root, options.port, options.strict_rfc1350)
-        server.serve_forever();
+        server.serve_forever()
     except TFTPServerConfigurationError, e:
         sys.stderr.write('TFTP server configuration error: %s!' %
                          e.message)
@@ -545,4 +550,3 @@ if __name__ == '__main__':
         sys.exit(main())
     except KeyboardInterrupt:
         pass
-

@@ -39,6 +39,7 @@ import dhcpserver
 
 l = notify.getLogger('pxed')
 
+
 class DHCPThread(threading.Thread):
     def __init__(self, iface, bootfile, router):
         threading.Thread.__init__(self)
@@ -47,6 +48,7 @@ class DHCPThread(threading.Thread):
 
     def run(self):
         self.server.serve_forever()
+
 
 def main():
     import optparse
@@ -75,14 +77,14 @@ def main():
 
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
-        loglevel=options.loglevel,
-        format='%(levelname)s(%(name)s): %(message)s')
+                                loglevel=options.loglevel,
+                                format='%(levelname)s(%(name)s): %(message)s')
     notify.StreamEngine.install(dhcpserver.l, stream=sys.stdout,
-        loglevel=options.loglevel,
-        format='%(levelname)s(%(name)s): %(message)s')
+                                loglevel=options.loglevel,
+                                format='%(levelname)s(%(name)s): %(message)s')
     notify.StreamEngine.install(tftpserver.l, stream=sys.stdout,
-        loglevel=options.loglevel,
-        format='%(levelname)s(%(name)s): %(message)s')
+                                loglevel=options.loglevel,
+                                format='%(levelname)s(%(name)s): %(message)s')
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)
@@ -106,4 +108,3 @@ if __name__ == '__main__':
         sys.exit(main())
     except KeyboardInterrupt:
         pass
-
