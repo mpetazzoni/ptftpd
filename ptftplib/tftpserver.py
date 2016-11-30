@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 
 # Author:     Maxime Petazzoni
 #             maxime.petazzoni@bulix.org
@@ -36,7 +37,6 @@ import logging
 import netifaces
 import os
 import socket
-import SocketServer
 import stat
 import sys
 import threading
@@ -45,6 +45,11 @@ import time
 from . import notify
 from . import proto
 from . import state
+
+try:
+    import SocketServer as socketserver  # Py2
+except ImportError:
+    import socketserver  # Py3
 
 l = notify.getLogger('tftpd')
 
@@ -72,7 +77,8 @@ class TFTPServerConfigurationError(Exception):
     """The configuration of the pTFTPd is incorrect."""
 
 
-class TFTPServerHandler(SocketServer.DatagramRequestHandler):
+# noinspection PyPep8Naming
+class TFTPServerHandler(socketserver.DatagramRequestHandler):
     """
     The SocketServer UDP datagram handler for the TFTP protocol.
     """
@@ -172,7 +178,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                     peer_state.state = state.STATE_ERROR
                     peer_state.error = proto.ERROR_OPTION_NEGOCIATION
 
-        except IOError, e:
+        except IOError as e:
             peer_state.state = state.STATE_ERROR
 
             if e.errno == errno.ENOENT:
@@ -231,7 +237,7 @@ class TFTPServerHandler(SocketServer.DatagramRequestHandler):
                       extra=peer_state.extra(notify.TRANSFER_FAILED))
             return self.finish_state(peer_state)
 
-        except IOError, e:
+        except IOError as e:
             # Otherwise, if the open failed because the file did not
             # exist, create it and go on
             if e.errno == errno.ENOENT:
@@ -455,7 +461,7 @@ class TFTPServerGarbageCollector(threading.Thread):
 
             toremove = []
 
-            for peer, peer_state in self.clients.iteritems():
+            for peer, peer_state in self.clients.items():
                 delta = datetime.today() - peer_state.last_seen
                 if delta > timedelta(seconds=state.STATE_TIMEOUT_SECS):
                     if peer_state.state != state.STATE_ERROR:
@@ -472,7 +478,11 @@ class TFTPServerGarbageCollector(threading.Thread):
 
 class TFTPServer(object):
     def __init__(self, iface, root, port=_PTFTPD_DEFAULT_PORT,
-                 strict_rfc1350=False, notification_callbacks={}):
+                 strict_rfc1350=False, notification_callbacks=None):
+
+        if notification_callbacks is None:
+            notification_callbacks = {}
+
         self.iface, self.root, self.port, self.strict_rfc1350 = \
                 iface, root, port, strict_rfc1350
         self.client_registry = {}
@@ -482,7 +492,7 @@ class TFTPServer(object):
                 "The specified TFTP root does not exist")
 
         self.ip, self.netmask, self.mac = get_ip_config_for_iface(self.iface)
-        self.server = SocketServer.UDPServer((self.ip, port),
+        self.server = socketserver.UDPServer((self.ip, port),
                                              TFTPServerHandler)
         self.server.root = self.root
         self.server.strict_rfc1350 = self.strict_rfc1350
@@ -533,11 +543,11 @@ def main():
     try:
         server = TFTPServer(iface, root, options.port, options.strict_rfc1350)
         server.serve_forever()
-    except TFTPServerConfigurationError, e:
+    except TFTPServerConfigurationError as e:
         sys.stderr.write('TFTP server configuration error: %s!' %
                          e.message)
         return 1
-    except socket.error, e:
+    except socket.error as e:
         sys.stderr.write('Error creating a listening socket on port %d: '
                          '%s (%s).\n' % (options.port, e[1],
                                          errno.errorcode[e[0]]))

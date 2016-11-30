@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 
 # Author:     Maxime Petazzoni
 #             maxime.petazzoni@bulix.org
@@ -18,6 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
+
+from __future__ import print_function
+
+try:
+    input = raw_input  # Py2
+except NameError:
+    pass  # Py3
 
 """Simple TFTP client.
 
@@ -61,7 +69,8 @@ _PTFTP_RFC1350_OPTS = {
 }
 
 
-class TFTPClient:
+# noinspection PyPep8Naming
+class TFTPClient(object):
     """
     A small and simple TFTP client to pull/push files from a TFTP server.
     """
@@ -69,7 +78,7 @@ class TFTPClient:
     PTFTP_STATE = None
 
     def __init__(self, peer, opts=None, mode='octet', rfc1350=False,
-                 notification_callbacks={}):
+                 notification_callbacks=None):
         """
         Initializes the TFTP client.
 
@@ -83,6 +92,9 @@ class TFTPClient:
             notification_callbacks (dict): a dictionary of notification
                 callbacks to use for the callback notification engine.
         """
+
+        if notification_callbacks is None:
+            notification_callbacks = {}
 
         self.peer = peer
         self.transfer_mode = mode
@@ -140,11 +152,11 @@ class TFTPClient:
         self.connect()
 
         while True:
-            print
+            print()
             try:
-                command = raw_input('tftp> ')
+                command = input('tftp> ')
             except EOFError:
-                print
+                print()
                 break
 
             if not command:
@@ -176,17 +188,17 @@ class TFTPClient:
           None.
         """
 
-        print 'Available commands:'
-        print
-        print '?  help                  Display help'
-        print 'q  quit                  Quit the TFTP client'
-        print 'm  mode [newmode]        Display or change transfer mode'
-        print 'b  blksize [newsize]     Display or change the transfer block size'
-        print
-        print 'g  get [-f] <filename>   Get <filename> from server.'
-        print '                         (use -f to overwrite local file)'
-        print 'p  put <filename>        Push <filename> to the server'
-        print
+        print('Available commands:')
+        print()
+        print('?  help                  Display help')
+        print('q  quit                  Quit the TFTP client')
+        print('m  mode [newmode]        Display or change transfer mode')
+        print('b  blksize [newsize]     Display or change the transfer block size')
+        print()
+        print('g  get [-f] <filename>   Get <filename> from server.')
+        print('                         (use -f to overwrite local file)')
+        print('p  put <filename>        Push <filename> to the server')
+        print()
 
     def handle(self):
         """
@@ -461,7 +473,7 @@ class TFTPClient:
             self.PTFTP_STATE.file = tempfile.NamedTemporaryFile(delete=False)
             self.PTFTP_STATE.packetnum = 1
             self.PTFTP_STATE.state = state.STATE_RECV
-        except IOError, e:
+        except IOError as e:
             print('Error: {}'.format(os.strerror(e.errno)))
             print('Can\'t write to temporary file {}!'
                   .format(self.PTFTP_STATE.file.name))
@@ -476,7 +488,7 @@ class TFTPClient:
             opts[proto.TFTP_OPTION_TSIZE] = 0
 
         # Everything's OK, let's go
-        print "Retrieving '%s' from the remote host..." % filename
+        print("Retrieving '%s' from the remote host..." % filename)
 
         packet = proto.TFTPHelper.createRRQ(filepath, self.transfer_mode, opts)
 
@@ -498,7 +510,7 @@ class TFTPClient:
         # Copy the temporary file to its final destination
         try:
             shutil.copy(self.PTFTP_STATE.file.name, filename)
-        except IOError, e:
+        except IOError as e:
             print('Error: {}'.format(os.strerror(e.errno)))
             print('Can\'t copy temporary file to local file {}!'
                   .format(filename))
@@ -537,7 +549,7 @@ class TFTPClient:
             self.PTFTP_STATE.filesize = os.stat(filepath)[stat.ST_SIZE]
             self.PTFTP_STATE.packetnum = 0
             self.PTFTP_STATE.state = state.STATE_SEND
-        except IOError, e:
+        except IOError as e:
             print('Error: {}'.format(os.strerror(e.errno)))
             print('Can\'t read from local file {}!'.format(filepath))
             return False
@@ -551,7 +563,7 @@ class TFTPClient:
             opts[proto.TFTP_OPTION_TSIZE] = self.PTFTP_STATE.filesize
 
         # Everything's OK, let's go
-        print "Pushing '%s' to the remote host..." % filepath
+        print("Pushing '%s' to the remote host..." % filepath)
 
         packet = proto.TFTPHelper.createWRQ(filepath, self.transfer_mode, opts)
 
@@ -613,21 +625,21 @@ class TFTPClient:
 
 
 def usage():
-    print "usage: %s [options]" % sys.argv[0]
-    print
-    print "  -?    --help         Get help"
-    print "  -h    --host <host>  Set TFTP server (default: %s)" % _PTFTP_DEFAULT_HOST
-    print "  -p    --port <port>  Define the port to connect to (default: %d)" % _PTFTP_DEFAULT_PORT
-    print "  -m    --mode <mode>  Set transfer mode (default: %s)" % _PTFTP_DEFAULT_MODE
-    print "                       Must be one of:", ', '.join(proto.TFTP_MODES)
-    print
-    print "Available extra options (using the TFTP option extension protocol):"
-    print "  -b    --blksize <n>  Set transfer block size (default: %d bytes)" % proto.TFTP_LAN_PACKET_SIZE
-    print
-    print "To disable the use of TFTP extensions:"
-    print "  -r    --rfc1350      Strictly comply to the RFC1350 only (no extensions)"
-    print "                       This will discard other TFTP option values."
-    print
+    print("usage: %s [options]" % sys.argv[0])
+    print()
+    print("  -?    --help         Get help")
+    print("  -h    --host <host>  Set TFTP server (default: %s)" % _PTFTP_DEFAULT_HOST)
+    print("  -p    --port <port>  Define the port to connect to (default: %d)" % _PTFTP_DEFAULT_PORT)
+    print("  -m    --mode <mode>  Set transfer mode (default: %s)" % _PTFTP_DEFAULT_MODE)
+    print("                       Must be one of:", ', '.join(proto.TFTP_MODES))
+    print()
+    print("Available extra options (using the TFTP option extension protocol):")
+    print("  -b    --blksize <n>  Set transfer block size (default: %d bytes)" % proto.TFTP_LAN_PACKET_SIZE)
+    print()
+    print("To disable the use of TFTP extensions:")
+    print("  -r    --rfc1350      Strictly comply to the RFC1350 only (no extensions)")
+    print("                       This will discard other TFTP option values.")
+    print()
 
 
 def main():

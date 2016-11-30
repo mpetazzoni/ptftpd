@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author:     Maxime Petazzoni
 #             maxime.petazzoni@bulix.org
 #
@@ -113,7 +114,8 @@ TFTP_TIMEOUT_MIN = 1
 TFTP_TIMEOUT_MAX = 255
 
 
-class TFTPHelper:
+# noinspection PyPep8Naming
+class TFTPHelper(object):
     """
     Static helper methods for the TFTP protocol.
     """
@@ -136,7 +138,7 @@ class TFTPHelper:
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
                              OP_RRQ, filename, '\0', mode, '\0')
 
-        for opt, val in opts.iteritems():
+        for opt, val in opts.items():
             packet += struct.pack('!%dsc%dsc' % (len(opt), len(str(val))),
                                   opt, '\0', str(val), '\0')
 
@@ -160,7 +162,7 @@ class TFTPHelper:
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
                              OP_WRQ, filename, '\0', mode, '\0')
 
-        for opt, val in opts.iteritems():
+        for opt, val in opts.items():
             packet += struct.pack('!%dsc%dsc' % (len(opt), len(str(val))),
                                   opt, '\0', str(val), '\0')
 
@@ -232,7 +234,7 @@ class TFTPHelper:
         l.debug("  >  %s: %s" % (TFTP_OPS[OP_OACK], opts))
 
         opts_str = ""
-        for opt, val in opts.iteritems():
+        for opt, val in opts.items():
             opts_str += "%s%c%s%c" % (opt, '\0', val, '\0')
 
         return struct.pack('!H%ds' % len(opts_str), OP_OACK, opts_str)
@@ -260,7 +262,7 @@ class TFTPHelper:
         mode = packet[1].lower()
 
         opts = {}
-        for i in xrange(2, len(packet)-1, 2):
+        for i in range(2, len(packet)-1, 2):
             opt = packet[i].lower()
             val = packet[i+1]
 
@@ -299,7 +301,7 @@ class TFTPHelper:
         mode = packet[1].lower()
 
         opts = {}
-        for i in xrange(2, len(packet)-1, 2):
+        for i in range(2, len(packet)-1, 2):
             opt = packet[i].lower()
             val = packet[i+1]
 
@@ -405,7 +407,7 @@ class TFTPHelper:
             raise SyntaxError()
 
         opts = {}
-        for i in xrange(0, len(packet)-1, 2):
+        for i in range(0, len(packet)-1, 2):
             opts[packet[i]] = packet[i+1]
 
         l.debug("  <  %s: %s" % (TFTP_OPS[OP_OACK], opts))
@@ -435,7 +437,7 @@ class TFTPHelper:
 
         if TFTP_OPTION_BLKSIZE in opts:
             blksize = int(opts[TFTP_OPTION_BLKSIZE])
-            if blksize >= TFTP_BLKSIZE_MIN and blksize <= TFTP_BLKSIZE_MAX:
+            if TFTP_BLKSIZE_MIN <= blksize <= TFTP_BLKSIZE_MAX:
                 used[TFTP_OPTION_BLKSIZE] = blksize
             else:
                 return None
@@ -444,7 +446,7 @@ class TFTPHelper:
 
         if TFTP_OPTION_TIMEOUT in opts:
             timeout = int(opts[TFTP_OPTION_TIMEOUT])
-            if timeout >= TFTP_TIMEOUT_MIN and timeout <= TFTP_TIMEOUT_MAX:
+            if TFTP_TIMEOUT_MIN <= timeout <= TFTP_TIMEOUT_MAX:
                 used[TFTP_OPTION_TIMEOUT] = timeout
             else:
                 return None

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 
 # Author:     David Anderson
 #             dave@natulte.net
@@ -90,11 +91,11 @@ def main():
         dhcp = DHCPThread(iface, bootfile, options.router)
         tftp = tftpserver.TFTPServer(iface, root,
                                      strict_rfc1350=options.strict_rfc1350)
-    except tftpserver.TFTPServerConfigurationError, e:
+    except tftpserver.TFTPServerConfigurationError as e:
         sys.stderr.write('TFTP server configuration error: %s!\n' %
                          e.message)
         return 1
-    except socket.error, e:
+    except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
                          (errno.errorcode[e[0]], e[1]))
         return 1

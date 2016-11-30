@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author:     Maxime Petazzoni
 #             maxime.petazzoni@bulix.org
 #
@@ -149,7 +150,9 @@ class CallbackEngine(logging.Handler):
                  state=record.state)
 
     @staticmethod
-    def install(logger, callbacks={}):
+    def install(logger, callbacks=None):
+        if callbacks is None:
+            callbacks = {}
         handler = CallbackEngine(callbacks)
         handler.addFilter(DetailFilter())
         logger.addHandler(handler)
