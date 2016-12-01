@@ -23,6 +23,7 @@
 from __future__ import print_function
 
 try:
+    # noinspection PyShadowingBuiltins
     input = raw_input  # Py2
 except NameError:
     pass  # Py3

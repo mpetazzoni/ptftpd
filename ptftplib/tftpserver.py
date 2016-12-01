@@ -388,7 +388,7 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
             else:
                 peer_state.data = data
 
-            next = peer_state.next()
+            next_state = peer_state.next()
 
             if peer_state.done:
                 l.debug("  <  DATA: %d packet(s) received."
@@ -403,7 +403,7 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
                   num == proto.TFTP_PACKETNUM_MAX-1):
                 l.debug('Packet number wraparound.')
 
-            return next
+            return next_state
 
         l.error('Unexpected DATA!',
                 extra=peer_state.extra(notify.TRANSFER_FAILED))
@@ -484,7 +484,7 @@ class TFTPServer(object):
             notification_callbacks = {}
 
         self.iface, self.root, self.port, self.strict_rfc1350 = \
-                iface, root, port, strict_rfc1350
+            iface, root, port, strict_rfc1350
         self.client_registry = {}
 
         if not os.path.isdir(self.root):
@@ -538,19 +538,19 @@ def main():
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format='%(levelname)s(%(name)s): %(message)s')
+                                format_='%(levelname)s(%(name)s): %(message)s')
 
     try:
         server = TFTPServer(iface, root, options.port, options.strict_rfc1350)
         server.serve_forever()
     except TFTPServerConfigurationError as e:
         sys.stderr.write('TFTP server configuration error: %s!' %
-                         e.message)
+                         e.args)
         return 1
     except socket.error as e:
         sys.stderr.write('Error creating a listening socket on port %d: '
-                         '%s (%s).\n' % (options.port, e[1],
-                                         errno.errorcode[e[0]]))
+                         '%s (%s).\n' % (options.port, e.args[1],
+                                         errno.errorcode[e.args[0]]))
         return 1
 
     return 0

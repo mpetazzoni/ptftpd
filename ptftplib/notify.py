@@ -59,7 +59,7 @@ class StreamEngine(logging.StreamHandler):
     """Simple stream log handler, similar to what you get using
     logging.basicConfig."""
 
-    def __init__(self, stream, loglevel, format):
+    def __init__(self, stream, loglevel, format_):
         """Creates a new notification engine that simply logs to the given
         stream.
 
@@ -67,35 +67,35 @@ class StreamEngine(logging.StreamHandler):
             stream (stream): logging stream.
             loglevel (logging.loglevel): minimum level of messages to be
                 outputted.
-            format (string format): default format string to apply
+            format_ (string format): default format string to apply
                 on log messages.
         """
 
         logging.StreamHandler.__init__(self, stream)
 
-        self.setFormatter(logging.Formatter(format))
+        self.setFormatter(logging.Formatter(format_))
         self.setLevel(loglevel)
 
     @staticmethod
     def install(logger, stream=sys.stderr, loglevel=logging.WARNING,
-                format='%(message)s'):
-        handler = StreamEngine(stream, loglevel, format)
+                format_='%(message)s'):
+        handler = StreamEngine(stream, loglevel, format_)
         logger.addHandler(handler)
 
 
 class DetailFilter(logging.Filter):
-    """This log filter filters log records that don't posess the extra
+    """This log filter filters log records that don't possess the extra
     information we require for advanced notifications (host, port, file name
     and transfer state)."""
 
     def filter(self, record):
         r = record.__dict__
-        return ('host' in r and 'port' in r and 'file' in r and 'state' in r)
+        return all(['host' in r, 'port' in r, 'file' in r, 'state' in r])
 
 
 class DetailledStreamEngine(StreamEngine):
     """The DetailledStreamEngine is a extension of the StreamEngine define
-    above designed to log detailled notifications. Pertinent log records are
+    above designed to log detailed notifications. Pertinent log records are
     filtered using the DetailFilter, as set up by the install() method."""
 
     def emit(self, record):
@@ -112,8 +112,8 @@ class DetailledStreamEngine(StreamEngine):
 
     @staticmethod
     def install(logger, stream=sys.stderr, loglevel=logging.INFO,
-                format='%(message)s (%(host)s:%(port)d#%(file)s %(state)s)'):
-        handler = DetailledStreamEngine(stream, loglevel, format)
+                format_='%(message)s (%(host)s:%(port)d#%(file)s %(state)s)'):
+        handler = DetailledStreamEngine(stream, loglevel, format_)
         handler.addFilter(DetailFilter())
         logger.addHandler(handler)
 
@@ -143,11 +143,11 @@ class CallbackEngine(logging.Handler):
         """Call the defined callback for the transfer state found in the log
         record."""
 
-        callable = self.callbacks.get(record.state, self._nop)
-        callable(host=record.host,
-                 port=record.port,
-                 file=record.file,
-                 state=record.state)
+        callable_ = self.callbacks.get(record.state, self._nop)
+        callable_(host=record.host,
+                  port=record.port,
+                  file=record.file,
+                  state=record.state)
 
     @staticmethod
     def install(logger, callbacks=None):

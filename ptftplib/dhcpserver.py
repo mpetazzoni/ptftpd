@@ -397,7 +397,7 @@ def main():
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format='%(levelname)s(%(name)s): %(message)s')
+                                format_='%(levelname)s(%(name)s): %(message)s')
 
     try:
         server = DHCPServer(iface, bootfile, router=options.router,
@@ -405,7 +405,7 @@ def main():
         server.serve_forever()
     except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
-                         (errno.errorcode[e[0]], e[1]))
+                         (errno.errorcode[e.args[0]], e.args[1]))
         return 1
 
     return 0

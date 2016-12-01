@@ -356,7 +356,7 @@ def main():
         server.serve_forever()
     except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
-                         (errno.errorcode[e[0]], e[1]))
+                         (errno.errorcode[e.args[0]], e.args[1]))
         return 1
 
     return 0
