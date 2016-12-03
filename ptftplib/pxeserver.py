@@ -79,13 +79,13 @@ def main():
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format_='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
     notify.StreamEngine.install(dhcpserver.l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format_='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
     notify.StreamEngine.install(tftpserver.l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format_='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)

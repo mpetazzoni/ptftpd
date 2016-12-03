@@ -538,7 +538,7 @@ def main():
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format_='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
 
     try:
         server = TFTPServer(iface, root, options.port, options.strict_rfc1350)

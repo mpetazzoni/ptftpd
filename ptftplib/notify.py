@@ -59,7 +59,7 @@ class StreamEngine(logging.StreamHandler):
     """Simple stream log handler, similar to what you get using
     logging.basicConfig."""
 
-    def __init__(self, stream, loglevel, format_):
+    def __init__(self, stream, loglevel, fmt):
         """Creates a new notification engine that simply logs to the given
         stream.
 
@@ -67,19 +67,19 @@ class StreamEngine(logging.StreamHandler):
             stream (stream): logging stream.
             loglevel (logging.loglevel): minimum level of messages to be
                 outputted.
-            format_ (string format): default format string to apply
+            fmt (string format): default format string to apply
                 on log messages.
         """
 
         logging.StreamHandler.__init__(self, stream)
 
-        self.setFormatter(logging.Formatter(format_))
+        self.setFormatter(logging.Formatter(fmt))
         self.setLevel(loglevel)
 
     @staticmethod
     def install(logger, stream=sys.stderr, loglevel=logging.WARNING,
-                format_='%(message)s'):
-        handler = StreamEngine(stream, loglevel, format_)
+                fmt='%(message)s'):
+        handler = StreamEngine(stream, loglevel, fmt)
         logger.addHandler(handler)
 
 
@@ -112,8 +112,8 @@ class DetailledStreamEngine(StreamEngine):
 
     @staticmethod
     def install(logger, stream=sys.stderr, loglevel=logging.INFO,
-                format_='%(message)s (%(host)s:%(port)d#%(file)s %(state)s)'):
-        handler = DetailledStreamEngine(stream, loglevel, format_)
+                fmt='%(message)s (%(host)s:%(port)d#%(file)s %(state)s)'):
+        handler = DetailledStreamEngine(stream, loglevel, fmt)
         handler.addFilter(DetailFilter())
         logger.addHandler(handler)
 
@@ -143,11 +143,11 @@ class CallbackEngine(logging.Handler):
         """Call the defined callback for the transfer state found in the log
         record."""
 
-        callable_ = self.callbacks.get(record.state, self._nop)
-        callable_(host=record.host,
-                  port=record.port,
-                  file=record.file,
-                  state=record.state)
+        callback = self.callbacks.get(record.state, self._nop)
+        callback(host=record.host,
+                 port=record.port,
+                 file=record.file,
+                 state=record.state)
 
     @staticmethod
     def install(logger, callbacks=None):
