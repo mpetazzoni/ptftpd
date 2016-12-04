@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 
 # Author:     David Anderson
 #             dave@natulte.net
@@ -273,7 +274,7 @@ class DHCPServer(object):
 
     def gc_allocated_ips(self):
         current = time.time()
-        old = [ip for ip, to in self.ips_allocated.iteritems()
+        old = [ip for ip, to in self.ips_allocated.items()
                if to <= current]
         for ip in old:
             l.info('Lease on %s expired' % ip)
@@ -396,15 +397,15 @@ def main():
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
 
     try:
         server = DHCPServer(iface, bootfile, router=options.router,
                             tftp_server=options.tftp_server)
         server.serve_forever()
-    except socket.error, e:
+    except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
-                         (errno.errorcode[e[0]], e[1]))
+                         (errno.errorcode[e.args[0]], e.args[1]))
         return 1
 
     return 0

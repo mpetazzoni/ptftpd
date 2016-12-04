@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 
 # Authors:    David Anderson
 #             dave@natulte.net
@@ -353,9 +354,9 @@ def main():
         server = BOOTPServer(iface, bootfile, router=options.router,
                              tftp_server=options.tftp_server)
         server.serve_forever()
-    except socket.error, e:
+    except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
-                         (errno.errorcode[e[0]], e[1]))
+                         (errno.errorcode[e.args[0]], e.args[1]))
         return 1
 
     return 0

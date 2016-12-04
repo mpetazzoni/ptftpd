@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author:     Maxime Petazzoni
 #             maxime.petazzoni@bulix.org
 #
@@ -32,7 +33,7 @@ STATE_ERROR = 32
 STATE_TIMEOUT_SECS = 10
 
 
-class TFTPState:
+class TFTPState(object):
     """
     This class represents a peer's state. Because SocketServer is not
     stateful, we use a global state registry of TFTPState objects to
@@ -231,7 +232,7 @@ class TFTPState:
         try:
             self.filesize += len(self.data)
             self.file.write(self.data)
-        except IOError, e:
+        except IOError as e:
             self.file.close()
             if e.errno == errno.ENOSPC:
                 return proto.TFTPHelper.createERROR(proto.ERROR_DISK_FULL)

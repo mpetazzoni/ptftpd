@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 
 # Author:     David Anderson
 #             dave@natulte.net
@@ -33,9 +34,9 @@ import socket
 import sys
 import threading
 
-import notify
-import tftpserver
-import dhcpserver
+from . import notify
+from . import tftpserver
+from . import dhcpserver
 
 l = notify.getLogger('pxed')
 
@@ -78,25 +79,25 @@ def main():
     # Setup notification logging
     notify.StreamEngine.install(l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
     notify.StreamEngine.install(dhcpserver.l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
     notify.StreamEngine.install(tftpserver.l, stream=sys.stdout,
                                 loglevel=options.loglevel,
-                                format='%(levelname)s(%(name)s): %(message)s')
+                                fmt='%(levelname)s(%(name)s): %(message)s')
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router)
         tftp = tftpserver.TFTPServer(iface, root,
                                      strict_rfc1350=options.strict_rfc1350)
-    except tftpserver.TFTPServerConfigurationError, e:
+    except tftpserver.TFTPServerConfigurationError as e:
         sys.stderr.write('TFTP server configuration error: %s!\n' %
-                         e.message)
+                         e.args)
         return 1
-    except socket.error, e:
+    except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
-                         (errno.errorcode[e[0]], e[1]))
+                         (errno.errorcode[e.args[0]], e.args[1]))
         return 1
 
     dhcp.start()
