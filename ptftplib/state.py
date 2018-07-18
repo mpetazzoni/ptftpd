@@ -70,19 +70,22 @@ class TFTPState(object):
 
         # Option defaults
         self.opts = {
-            proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE
+            proto.TFTP_OPTION_BLKSIZE: proto.TFTP_DEFAULT_PACKET_SIZE,
+            proto.TFTP_OPTION_WINDOWSIZE: proto.TFTP_DEFAULT_WINDOW_SIZE,
         }
 
         self.last_seen = datetime.today()
 
         self.packetnum = None               # Current data packet number
+        self.last_acked = 0                 # Packet number of the last acked
+                                            # DATA packet
         self.loop_packetnum = loop_packet   # Packet number wraparound toggle
         self.total_packets = 0              # Total number of data packets sent
                                             # or received
         self.error = None                   # TFTP error code to send
                                             # (if state == error)
         self.data = None
-        self.tosend = ""
+        self.tosend = bytes()
 
     def extra(self, state):
         """Build an extra information dictionnary we can pass to logging
@@ -190,10 +193,10 @@ class TFTPState(object):
 
         # Convert LF to CRLF if needed
         if self.mode == 'netascii':
-            fromfile = proto.OCTET_TO_NETASCII.sub('\r\n', fromfile)
+            fromfile = proto.OCTET_TO_NETASCII.sub(b'\r\n', fromfile)
 
         self.data = self.tosend + fromfile
-        self.tosend = ""
+        self.tosend = bytes()
 
         self.packetnum += 1
         self.total_packets += 1
@@ -210,7 +213,18 @@ class TFTPState(object):
             self.file.close()
             self.state = STATE_SEND_LAST
 
-        return proto.TFTPHelper.createDATA(self.packetnum, self.data)
+        packet = proto.TFTPHelper.createDATA(self.packetnum, self.data)
+
+        # If the window hasn't been completed yet, send the DATA packet
+        # and provide a continuation for the next DATA packet to send in the
+        # window.
+        next_window = self.last_acked + self.opts[proto.TFTP_OPTION_WINDOWSIZE]
+        if self.state == STATE_SEND and self.packetnum < next_window:
+            return packet, self.next
+
+        # Otherwise just send this DATA packet and we'll wait for the client to
+        # reply with a ACK.
+        return packet
 
     def __next_send_oack(self):
         self.state = STATE_SEND if self.op == proto.OP_RRQ else STATE_RECV
@@ -244,8 +258,9 @@ class TFTPState(object):
         if self.done:
             self.file.close()
 
-        ack = proto.TFTPHelper.createACK(self.packetnum)
+        packetnum = self.packetnum
 
+        # Compute next packet number
         if not self.done:
             self.packetnum += 1
             self.total_packets += 1
@@ -254,7 +269,11 @@ class TFTPState(object):
         if self.packetnum == proto.TFTP_PACKETNUM_MAX and self.loop_packetnum:
             self.packetnum = proto.TFTP_PACKETNUM_RESET
 
-        return ack
+        # Only return a ACK if the window size has been reached, or when done
+        next_window = self.last_acked + self.opts[proto.TFTP_OPTION_WINDOWSIZE]
+        if self.done or packetnum >= next_window:
+            self.last_acked = packetnum
+            return proto.TFTPHelper.createACK(packetnum)
 
     def __next_error(self):
         return proto.TFTPHelper.createERROR(self.error)

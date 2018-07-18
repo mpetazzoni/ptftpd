@@ -10,10 +10,10 @@ Available tools include:
 
 -  ``bootpd``: a BOOTP server (RFC951 and RFC1497 compliant)
 -  ``dhcpd``: a simple, stripped-down DHCP server.
--  ``ptftpd``: the TFTP server (RFC1350, 2347, 2348 and 2349 compliant)
+-  ``ptftpd``: the TFTP server (RFC1350, 2347, 2348, 2349 and 7440 compliant)
 -  ``pxed``: a one-call PXE server using dhcpd and ptftpd.
--  ``ptftp``: a simple TFTP client (RFC1350, 2347, 2348 and 2349 compliant and
-   capable)
+-  ``ptftp``: a simple TFTP client (RFC1350, 2347, 2348, 2349 and 7440
+   compliant and capable)
 
 They all support the ``--help`` option to present the usage summary to
 the user.

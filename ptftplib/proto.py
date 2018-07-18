@@ -36,6 +36,7 @@ notify.NullEngine.install(l)
 #   - RFC2347 - TFTP Option Extension
 #   - RFC2348 - TFTP Blocksize option
 #   - RFC2349 - TFTP Timeout interval and Transfer size options
+#   - RFC7440 - TFTP Windowsize Option
 
 # TFTP data packet size. A data packet with a length less than this
 # size is considered as being the last packet of the transmission.
@@ -43,6 +44,12 @@ TFTP_DEFAULT_PACKET_SIZE = 512
 
 # Enhanced data packet size for LAN networks
 TFTP_LAN_PACKET_SIZE = 1400
+
+# TFTP default window size (equivalent to the option not being used).
+TFTP_DEFAULT_WINDOW_SIZE = 1
+
+# Enhanced window size for LAN networks
+TFTP_LAN_WINDOW_SIZE = 8
 
 # Maximum packet number (2^16). When reached, we may want to wraparound and
 # reset to TFTP_PACKETNUM_RESET to continue transfer (some clients may not
@@ -96,22 +103,31 @@ TFTP_ERRORS = {
 }
 
 # TFTP transfer modes (mail is deprecated as of RFC1350)
-TFTP_MODES = ['netascii', 'octet']
+TFTP_MODES = set(['netascii', 'octet'])
 NETASCII_TO_OCTET = re.compile('\r\n')
 OCTET_TO_NETASCII = re.compile('\r?\n')
 
-# TFTP option names, as defined in RFC2348 and RFC2349
+# TFTP option names, as defined in RFC2348, RFC2349 and RFC7440
 TFTP_OPTION_BLKSIZE = 'blksize'
 TFTP_OPTION_TIMEOUT = 'timeout'
 TFTP_OPTION_TSIZE = 'tsize'
+TFTP_OPTION_WINDOWSIZE = 'windowsize'
 
-TFTP_OPTIONS = [TFTP_OPTION_BLKSIZE, TFTP_OPTION_TIMEOUT, TFTP_OPTION_TSIZE]
+TFTP_OPTIONS = set([
+    TFTP_OPTION_BLKSIZE,
+    TFTP_OPTION_TIMEOUT,
+    TFTP_OPTION_TSIZE,
+    TFTP_OPTION_WINDOWSIZE
+])
 
 TFTP_BLKSIZE_MIN = 8
 TFTP_BLKSIZE_MAX = 65464
 
 TFTP_TIMEOUT_MIN = 1
 TFTP_TIMEOUT_MAX = 255
+
+TFTP_WINDOWSIZE_MIN = 1
+TFTP_WINDOWSIZE_MAX = 65535
 
 
 # noinspection PyPep8Naming
@@ -136,11 +152,14 @@ class TFTPHelper(object):
                 (TFTP_OPS[OP_RRQ], filename, mode, opts))
 
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
-                             OP_RRQ, filename, '\0', mode, '\0')
+                             OP_RRQ,
+                             filename.encode('ascii'), b'\0',
+                             mode.encode('ascii'), b'\0')
 
         for opt, val in opts.items():
             packet += struct.pack('!%dsc%dsc' % (len(opt), len(str(val))),
-                                  opt, '\0', str(val), '\0')
+                                  opt.encode('ascii'), b'\0',
+                                  str(val).encode('ascii'), b'\0')
 
         return packet
 
@@ -160,11 +179,14 @@ class TFTPHelper(object):
                 (TFTP_OPS[OP_WRQ], filename, mode, opts))
 
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
-                             OP_WRQ, filename, '\0', mode, '\0')
+                             OP_WRQ,
+                             filename.encode('ascii'), b'\0',
+                             mode.encode('ascii'), b'\0')
 
         for opt, val in opts.items():
             packet += struct.pack('!%dsc%dsc' % (len(opt), len(str(val))),
-                                  opt, '\0', str(val), '\0')
+                                  opt.encode('ascii'), b'\0',
+                                  str(val).encode('ascii'), b'\0')
 
         return packet
 
@@ -204,7 +226,8 @@ class TFTPHelper(object):
 
         l.debug("  > %s: %d %s" % (TFTP_OPS[OP_ERROR], errno, error))
         return struct.pack('!HH%dsc' % len(error),
-                           OP_ERROR, errno, error, '\0')
+                           OP_ERROR, errno,
+                           error.encode('ascii'), b'\0')
 
     def createDATA(num, data):
         """
@@ -212,7 +235,7 @@ class TFTPHelper(object):
 
         Args:
           num: the data packet number (int).
-          data: the data to be sent (string).
+          data: the data to be sent (bytes).
         Returns:
           The data packet as a string.
         """
@@ -237,7 +260,8 @@ class TFTPHelper(object):
         for opt, val in opts.items():
             opts_str += "%s%c%s%c" % (opt, '\0', val, '\0')
 
-        return struct.pack('!H%ds' % len(opts_str), OP_OACK, opts_str)
+        return struct.pack('!H%ds' % len(opts_str),
+                           OP_OACK, opts_str.encode('ascii'))
 
     def parseRRQ(request):
         """
@@ -251,32 +275,32 @@ class TFTPHelper(object):
           If the parsing failed, a SyntaxError is raised.
         """
 
-        packet = request.split('\0')[:-1]
+        packet = request.split(b'\0')[:-1]
 
         # If the length of the parsed list is not even, the packet is
         # malformed and thus parsing should fail.
         if len(packet) % 2 != 0:
-            raise SyntaxError
+            raise SyntaxError('invalid request packet')
 
-        filename = packet[0]
-        mode = packet[1].lower()
+        filename = packet[0].decode('ascii')
+        if not filename:
+            raise SyntaxError('invalid filename')
+
+        mode = packet[1].decode('ascii').lower()
+        if mode not in TFTP_MODES:
+            raise SyntaxError('unknown mode %s' % mode)
 
         opts = {}
         for i in range(2, len(packet)-1, 2):
-            opt = packet[i].lower()
-            val = packet[i+1]
+            opt = packet[i].decode('ascii').lower()
+            val = packet[i+1].decode('ascii')
 
             if opt in TFTP_OPTIONS:
                 opts[opt] = val
 
-        try:
-            TFTP_MODES.index(mode)
-            if filename != '':
-                l.debug("  <   %s: %s (mode: %s, opts: %s)" %
-                        (TFTP_OPS[OP_RRQ], filename, mode, opts))
-                return filename, mode, opts
-        except ValueError:
-            raise SyntaxError()
+        l.debug("  <   %s: %s (mode: %s, opts: %s)" %
+                (TFTP_OPS[OP_RRQ], filename, mode, opts))
+        return filename, mode, opts
 
     def parseWRQ(request):
         """
@@ -290,32 +314,32 @@ class TFTPHelper(object):
           If the parsing failed, a SyntaxError is raised.
         """
 
-        packet = request.split('\0')[:-1]
+        packet = request.split(b'\0')[:-1]
 
         # If the length of the parsed list is not even, the packet is
         # malformed and thus parsing should fail.
         if len(packet) % 2 != 0:
-            raise SyntaxError()
+            raise SyntaxError('invalid request packet')
 
-        filename = packet[0]
-        mode = packet[1].lower()
+        filename = packet[0].decode('ascii')
+        if not filename:
+            raise SyntaxError('invalid filename')
+
+        mode = packet[1].decode('ascii').lower()
+        if mode not in TFTP_MODES:
+            raise SyntaxError('unknown mode %s' % mode)
 
         opts = {}
         for i in range(2, len(packet)-1, 2):
-            opt = packet[i].lower()
-            val = packet[i+1]
+            opt = packet[i].decode('ascii').lower()
+            val = packet[i+1].decode('ascii')
 
             if opt in TFTP_OPTIONS:
                 opts[opt] = val
 
-        try:
-            TFTP_MODES.index(mode)
-            if filename != '':
-                l.debug("  <   %s: %s (mode: %s, opts: %s)" %
-                        (TFTP_OPS[OP_WRQ], filename, mode, opts))
-                return filename, mode, opts
-        except ValueError:
-            raise SyntaxError()
+        l.debug("  <   %s: %s (mode: %s, opts: %s)" %
+                (TFTP_OPS[OP_WRQ], filename, mode, opts))
+        return filename, mode, opts
 
     def parseACK(request):
         """
@@ -340,7 +364,7 @@ class TFTPHelper(object):
 
             return num
         except struct.error:
-            raise SyntaxError()
+            raise SyntaxError('invalid acknowledgment packet')
 
     def parseDATA(request):
         """
@@ -364,7 +388,7 @@ class TFTPHelper(object):
                     (TFTP_OPS[OP_DATA], num, len(data)))
             return num, data
         except struct.error:
-            raise SyntaxError()
+            raise SyntaxError('invalid data packet')
 
     def parseERROR(request):
         """
@@ -382,12 +406,12 @@ class TFTPHelper(object):
         try:
             packet = struct.unpack('!H', request[:2])
             errno = packet[0]
-            errmsg = request[2:].split('\0')[0]
+            errmsg = request[2:].split(b'\0')[0].decode('ascii')
 
             l.debug("  < %s: %s" % (TFTP_OPS[OP_ERROR], errmsg))
             return errno, errmsg
         except (struct.error, IndexError):
-            raise SyntaxError()
+            raise SyntaxError('invalid error packet')
 
     def parseOACK(request):
         """
@@ -399,27 +423,29 @@ class TFTPHelper(object):
           A dictionnary of the acknowledged options.
         """
 
-        packet = request.split('\0')[:-1]
+        packet = request.split(b'\0')[:-1]
 
         # If the length of the parsed list is not even, the packet is
         # malformed and thus parsing should fail.
         if len(packet) % 2 != 0:
-            raise SyntaxError()
+            raise SyntaxError('invalid request packet')
 
         opts = {}
         for i in range(0, len(packet)-1, 2):
-            opts[packet[i]] = packet[i+1]
+            opt = packet[i].decode('ascii').lower()
+            val = packet[i+1].decode('ascii')
+            opts[opt] = val
 
         l.debug("  <  %s: %s" % (TFTP_OPS[OP_OACK], opts))
 
         return opts
 
-    def getOP(data):
+    def get_opcode(data):
         if data:
             try:
                 return struct.unpack('!H', data[:2])[0]
             except (struct.error, KeyError):
-                raise SyntaxError()
+                raise SyntaxError('invalid packet')
 
         return None
 
@@ -454,7 +480,20 @@ class TFTPHelper(object):
         if TFTP_OPTION_TSIZE in opts:
             used[TFTP_OPTION_TSIZE] = int(opts[TFTP_OPTION_TSIZE])
 
+        if TFTP_OPTION_WINDOWSIZE in opts:
+            windowsize = int(opts[TFTP_OPTION_WINDOWSIZE])
+            if TFTP_WINDOWSIZE_MIN <= windowsize <= TFTP_WINDOWSIZE_MAX:
+                used[TFTP_OPTION_WINDOWSIZE] = windowsize
+            else:
+                return None
+        else:
+            used[TFTP_OPTION_WINDOWSIZE] = TFTP_DEFAULT_WINDOW_SIZE
+
         return used
+
+    def get_data_size(blksize):
+        """Return the expected size of a DATA packet, in bytes."""
+        return TFTP_OPCODE_LEN + 2 + blksize
 
     createRRQ = staticmethod(createRRQ)
     createWRQ = staticmethod(createWRQ)
@@ -470,5 +509,6 @@ class TFTPHelper(object):
     parseERROR = staticmethod(parseERROR)
     parseOACK = staticmethod(parseOACK)
 
-    getOP = staticmethod(getOP)
+    get_opcode = staticmethod(get_opcode)
     parse_options = staticmethod(parse_options)
+    get_data_size = staticmethod(get_data_size)

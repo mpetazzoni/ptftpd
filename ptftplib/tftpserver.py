@@ -37,6 +37,7 @@ import logging
 import netifaces
 import os
 import socket
+import subprocess
 import stat
 import sys
 import threading
@@ -59,22 +60,25 @@ _PTFTPD_DEFAULT_PATH = '/tftpboot'
 
 
 def get_ip_config_for_iface(iface):
-    """Retrieve and return the IP address/netmask and MAC address of the
-    given interface."""
-
+    """Retrieve and return the IP address/netmask of the given interface."""
     if iface not in netifaces.interfaces():
         raise TFTPServerConfigurationError(
                 'Unknown network interface {}'.format(iface))
 
     details = netifaces.ifaddresses(iface)
     inet = details[netifaces.AF_INET][0]
-    link = details[netifaces.AF_LINK][0]
+    return inet['addr'], inet['netmask']
 
-    return inet['addr'], inet['netmask'], link['addr']
+
+def get_max_udp_datagram_size():
+    """Retrieve the maximum UDP datagram size allowed by the system."""
+    val = subprocess.check_output(['sysctl', '-n', 'net.inet.udp.maxdgram'])
+    return int(val)
 
 
 class TFTPServerConfigurationError(Exception):
     """The configuration of the pTFTPd is incorrect."""
+    pass
 
 
 # noinspection PyPep8Naming
@@ -88,12 +92,10 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
         Handles an incoming request by unpacking the TFTP opcode and
         dispatching to one of the serve* method of this class.
         """
-
         request = self.rfile.read()
-        response = None
 
         # Get the packet opcode and dispatch
-        opcode = proto.TFTPHelper.getOP(request)
+        opcode = proto.TFTPHelper.get_opcode(request)
 
         if not opcode:
             l.error("Can't find packet opcode, packet ignored")
@@ -102,22 +104,45 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
         if opcode not in proto.TFTP_OPS:
             l.error("Unknown operation %d" % opcode)
             response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
-            self.wfile.write(response)
-            self.wfile.flush()
+            self.send_response(response)
             return
 
         try:
             handler = getattr(self, "serve%s" % proto.TFTP_OPS[opcode])
+            response = handler(opcode, request[2:])
         except AttributeError:
             l.error("Unsupported operation %s" % opcode)
             response = proto.TFTPHelper.createERROR(
                     proto.ERROR_UNDEF,
                     'Operation not supported by server.')
+        except:
+            response = proto.TFTPHelper.createERROR(
+                    proto.ERROR_UNDEF,
+                    'Server error.')
+        finally:
+            self.send_response(response)
 
-        response = handler(opcode, request[2:])
-        if response:
-            self.wfile.write(response)
-            self.wfile.flush()
+    def send_response(self, response):
+        """
+        Send a response to the client.
+
+        Args:
+            response (bytes or tuple): the response packet sequence. If the
+            argument is a simple bytestring object, it is sent as-is. If it is
+            a tuple, it is expected to be a 2-uple containing first a
+            bytestring packet, and second a function that, when called, returns
+            the next packet sequence to send through this method (recursively).
+        """
+        if not response:
+            return
+
+        if type(response) == tuple:
+            self.send_response(response[0])
+            self.send_response(response[1]())
+            return
+
+        self.wfile.write(response)
+        self.wfile.flush()
 
     def finish_state(self, peer_state):
         self.server.clients[self.client_address] = peer_state
@@ -168,6 +193,16 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
             if not self.server.strict_rfc1350 and len(opts):
                 opts = proto.TFTPHelper.parse_options(opts)
                 if opts:
+                    blksize = opts[proto.TFTP_OPTION_BLKSIZE]
+                    windowsize = opts[proto.TFTP_OPTION_WINDOWSIZE]
+                    max_window_size = int(
+                            get_max_udp_datagram_size() /
+                            proto.TFTPHelper.get_data_size(blksize))
+                    if windowsize > max_window_size:
+                        l.info('Restricting window size to %d to fit UDP.' %
+                               max_window_size)
+                        opts[proto.TFTP_OPTION_WINDOWSIZE] = max_window_size
+
                     # HOOK: this is where we should check that we accept
                     # the options requested by the client.
 
@@ -315,6 +350,7 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
                 l.debug('Got duplicate ACK packet #%d. Ignoring.' % num)
                 pass
             elif peer_state.packetnum != num:
+                # TODO: handle ACK recovery when operating in streaming mode.
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ILLEGAL_OP
                 l.error('Got ACK with incoherent data packet number. '
@@ -325,6 +361,7 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
                     num == proto.TFTP_PACKETNUM_MAX - 1:
                 l.debug('Packet number wraparound.')
 
+            peer_state.last_acked = num
             return peer_state.next()
 
         elif peer_state.state == state.STATE_RECV and num == 0:
@@ -491,7 +528,7 @@ class TFTPServer(object):
             raise TFTPServerConfigurationError(
                 "The specified TFTP root does not exist")
 
-        self.ip, self.netmask, self.mac = get_ip_config_for_iface(self.iface)
+        self.ip, self.netmask = get_ip_config_for_iface(self.iface)
         self.server = socketserver.UDPServer((self.ip, port),
                                              TFTPServerHandler)
         self.server.root = self.root
@@ -503,8 +540,8 @@ class TFTPServer(object):
         notify.CallbackEngine.install(l, notification_callbacks)
 
     def serve_forever(self):
-        l.info("Serving TFTP requests on %s:%d in %s" %
-               (self.iface, self.port, self.root))
+        l.info("Serving TFTP requests on %s/%s:%d in %s" %
+               (self.iface, self.ip, self.port, self.root))
         self.cleanup_thread.start()
         self.server.serve_forever()
 
