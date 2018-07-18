@@ -30,8 +30,6 @@ Note that this program currently does *not* support the timeout
 interval option from RFC2349.
 """
 
-from datetime import datetime
-from datetime import timedelta
 import errno
 import logging
 import netifaces
@@ -499,8 +497,8 @@ class TFTPServerGarbageCollector(threading.Thread):
             toremove = []
 
             for peer, peer_state in self.clients.items():
-                delta = datetime.today() - peer_state.last_seen
-                if delta > timedelta(seconds=state.STATE_TIMEOUT_SECS):
+                delta = time.time() - peer_state.last_seen
+                if delta > state.STATE_TIMEOUT_SECS:
                     if peer_state.state != state.STATE_ERROR:
                         l.debug("Peer %s:%d timed out." % peer,
                                 extra=peer_state.extra(notify.TRANSFER_FAILED))
