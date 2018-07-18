@@ -17,9 +17,9 @@
 # You should have received a copy of the GNU General Public License
 # along with pTFTPd.  If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
 import errno
 import os
+import time
 
 from . import proto
 
@@ -74,7 +74,7 @@ class TFTPState(object):
             proto.TFTP_OPTION_WINDOWSIZE: proto.TFTP_DEFAULT_WINDOW_SIZE,
         }
 
-        self.last_seen = datetime.today()
+        self.last_seen = time.time()
 
         self.packetnum = None               # Current data packet number
         self.last_acked = 0                 # Packet number of the last acked
@@ -143,7 +143,7 @@ class TFTPState(object):
         Update the last seen value to restart the watchdog.
         """
 
-        self.last_seen = datetime.today()
+        self.last_seen = time.time()
 
     def set_opts(self, opts):
         """

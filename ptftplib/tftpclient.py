@@ -40,13 +40,13 @@ Note that this program currently does *not* support the timeout
 interval option from RFC2349.
 """
 
-from datetime import datetime
 import os
 import shutil
 import socket
 import stat
 import sys
 import tempfile
+import time
 
 from . import notify
 from . import proto
@@ -541,10 +541,10 @@ class TFTPClient(object):
 
         packet = proto.TFTPHelper.createRRQ(filepath, self.transfer_mode, opts)
 
-        transfer_start = datetime.today()
+        transfer_start = time.time()
         self.sock.send(packet, self.peer)
         self.handle()
-        transfer_time = datetime.today() - transfer_start
+        transfer_time = time.time() - transfer_start
 
         if self.error:
             error, errmsg = self.error
@@ -616,10 +616,10 @@ class TFTPClient(object):
 
         packet = proto.TFTPHelper.createWRQ(filepath, self.transfer_mode, opts)
 
-        transfer_start = datetime.today()
+        transfer_start = time.time()
         self.sock.send(packet, self.peer)
         self.handle()
-        transfer_time = datetime.today() - transfer_start
+        transfer_time = time.time() - transfer_start
 
         if self.error:
             error, errmsg = self.error
@@ -686,8 +686,7 @@ class TFTPClient(object):
             print('Window size must be a number!')
 
     def __get_speed(self, filesize, time):
-        return (filesize / 1024.0 /
-                (time.seconds + time.microseconds / 1000000.0))
+        return (filesize / 1024.0 / time)
 
 
 def usage():
