@@ -687,11 +687,7 @@ class TFTPClient(object):
             print('Window size must be a number!')
 
     def __get_speed(self, filesize, time):
-<<<<<<< HEAD
-        return (filesize / 1024.0 / time)
-=======
         return filesize / 1024.0 / time
->>>>>>> 957ea8b... allow client to be imported
 
 
 def usage():
