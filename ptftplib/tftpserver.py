@@ -131,16 +131,14 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
             bytestring packet, and second a function that, when called, returns
             the next packet sequence to send through this method (recursively).
         """
-        if not response:
-            return
+        while response:
+            if type(response) == tuple:
+                message, response = response[0], response[1]()
+            else:
+                message, response = response, None
 
-        if type(response) == tuple:
-            self.send_response(response[0])
-            self.send_response(response[1]())
-            return
-
-        self.wfile.write(response)
-        self.wfile.flush()
+            self.wfile.write(message)
+            self.wfile.flush()
 
     def finish_state(self, peer_state):
         self.server.clients[self.client_address] = peer_state
