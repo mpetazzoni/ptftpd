@@ -40,13 +40,13 @@ Note that this program currently does *not* support the timeout
 interval option from RFC2349.
 """
 
-from datetime import datetime
 import os
 import shutil
 import socket
 import stat
 import sys
 import tempfile
+import time
 
 from . import notify
 from . import proto
@@ -312,11 +312,11 @@ class TFTPClient(object):
                 response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
             elif opcode not in proto.TFTP_OPS:
                 self.error = (True,
-                              "Unknown or unsupported operation %d!" % opcode)
+                              'Unknown or unsupported operation %d!' % opcode)
                 response = proto.TFTPHelper.createERROR(proto.ERROR_ILLEGAL_OP)
             else:
                 try:
-                    handler = getattr(self, "serve%s" % proto.TFTP_OPS[opcode])
+                    handler = getattr(self, 'serve' + proto.TFTP_OPS[opcode])
                     response = handler(opcode, request[2:])
                 except AttributeError:
                     self.error = (True, 'Operation not supported.')
@@ -537,14 +537,14 @@ class TFTPClient(object):
             opts[proto.TFTP_OPTION_TSIZE] = 0
 
         # Everything's OK, let's go
-        print("Retrieving '%s' from the remote host..." % filename)
+        print('Retrieving "%s" from the remote host...' % filename)
 
         packet = proto.TFTPHelper.createRRQ(filepath, self.transfer_mode, opts)
 
-        transfer_start = datetime.today()
+        transfer_start = time.time()
         self.sock.send(packet, self.peer)
         self.handle()
-        transfer_time = datetime.today() - transfer_start
+        transfer_time = time.time() - transfer_start
 
         if self.error:
             error, errmsg = self.error
@@ -612,14 +612,14 @@ class TFTPClient(object):
             opts[proto.TFTP_OPTION_TSIZE] = self.PTFTP_STATE.filesize
 
         # Everything's OK, let's go
-        print("Pushing '%s' to the remote host..." % filepath)
+        print('Pushing "%s" to the remote host...' % filepath)
 
         packet = proto.TFTPHelper.createWRQ(filepath, self.transfer_mode, opts)
 
-        transfer_start = datetime.today()
+        transfer_start = time.time()
         self.sock.send(packet, self.peer)
         self.handle()
-        transfer_time = datetime.today() - transfer_start
+        transfer_time = time.time() - transfer_start
 
         if self.error:
             error, errmsg = self.error
@@ -686,28 +686,27 @@ class TFTPClient(object):
             print('Window size must be a number!')
 
     def __get_speed(self, filesize, time):
-        return (filesize / 1024.0 /
-                (time.seconds + time.microseconds / 1000000.0))
+        return filesize / 1024.0 / time
 
 
 def usage():
-    print("usage: %s [options]" % sys.argv[0])
+    print('usage: %s [options]' % sys.argv[0])
     print()
-    print("  -?    --help           Get help")
-    print("  -h    --host <host>    Set TFTP server (default: %s)" % _PTFTP_DEFAULT_HOST)
-    print("  -p    --port <port>    Define the port to connect to (default: %d)" % _PTFTP_DEFAULT_PORT)
-    print("  -m    --mode <mode>    Set transfer mode (default: %s)" % _PTFTP_DEFAULT_MODE)
-    print("                         Must be one of:", ', '.join(proto.TFTP_MODES))
+    print('  -?    --help           Get help')
+    print('  -h    --host <host>    Set TFTP server (default: %s)' % _PTFTP_DEFAULT_HOST)
+    print('  -p    --port <port>    Define the port to connect to (default: %d)' % _PTFTP_DEFAULT_PORT)
+    print('  -m    --mode <mode>    Set transfer mode (default: %s)' % _PTFTP_DEFAULT_MODE)
+    print('                         Must be one of:', ', '.join(proto.TFTP_MODES))
     print()
-    print("Available extra options (using the TFTP option extension protocol):")
-    print("  -b    --blksize <n>    Set transfer block size (default: %d bytes)" % proto.TFTP_LAN_PACKET_SIZE)
-    print("                         Must be between %d and %d" % (proto.TFTP_BLKSIZE_MIN, proto.TFTP_BLKSIZE_MAX))
-    print("  -w    --windowsize <n> Set streaming window size (default: %d)" % proto.TFTP_LAN_WINDOW_SIZE)
-    print("                         Must be between %d and %d" % (proto.TFTP_WINDOWSIZE_MIN, proto.TFTP_WINDOWSIZE_MAX))
+    print('Available extra options (using the TFTP option extension protocol):')
+    print('  -b    --blksize <n>    Set transfer block size (default: %d bytes)' % proto.TFTP_LAN_PACKET_SIZE)
+    print('                         Must be between %d and %d' % (proto.TFTP_BLKSIZE_MIN, proto.TFTP_BLKSIZE_MAX))
+    print('  -w    --windowsize <n> Set streaming window size (default: %d)' % proto.TFTP_LAN_WINDOW_SIZE)
+    print('                         Must be between %d and %d' % (proto.TFTP_WINDOWSIZE_MIN, proto.TFTP_WINDOWSIZE_MAX))
     print()
-    print("To disable the use of TFTP extensions:")
-    print("  -r    --rfc1350        Strictly comply to the RFC1350 only (no extensions)")
-    print("                         This will discard other TFTP option values.")
+    print('To disable the use of TFTP extensions:')
+    print('  -r    --rfc1350        Strictly comply to the RFC1350 only (no extensions)')
+    print('                         This will discard other TFTP option values.')
     print()
 
 
