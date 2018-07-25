@@ -565,13 +565,13 @@ class TFTPClient(object):
                   .format(filename))
             return False
 
+        transfer_speed = self.__get_speed(self.PTFTP_STATE.filesize, transfer_time)
+
         print('Transfer complete, {} bytes ({:.2f} kB/s)'
-              .format(self.PTFTP_STATE.filesize,
-                      self.__get_speed(self.PTFTP_STATE.filesize,
-                                       transfer_time)))
+              .format(self.PTFTP_STATE.filesize, transfer_speed))
         self.PTFTP_STATE.file.close()
         os.remove(self.PTFTP_STATE.file.name)
-        return True
+        return (self.PTFTP_STATE.filesize, transfer_speed)
 
     def put(self, args):
         """
@@ -627,11 +627,11 @@ class TFTPClient(object):
                 print('Error: {}'.format(errmsg))
             return False
 
+        transfer_speed = self.__get_speed(self.PTFTP_STATE.filesize, transfer_time)
+
         print('Transfer complete, {} bytes ({:.2f} kB/s)'
-              .format(self.PTFTP_STATE.filesize,
-                      self.__get_speed(self.PTFTP_STATE.filesize,
-                                       transfer_time)))
-        return True
+              .format(self.PTFTP_STATE.filesize, transfer_speed))
+        return (self.PTFTP_STATE.filesize, transfer_speed)
 
     def mode(self, args):
         if len(args) > 1:
@@ -709,6 +709,11 @@ def usage():
     print('                         This will discard other TFTP option values.')
     print()
 
+def client(host=_PTFTP_DEFAULT_HOST, port=_PTFTP_DEFAULT_PORT, 
+           mode=_PTFTP_DEFAULT_MODE, exts={}, rfc1350=False):
+    client = TFTPClient((host, port), exts, mode, rfc1350)
+    client.connect()
+    return client
 
 def main():
     # TODO: convert to optparse
