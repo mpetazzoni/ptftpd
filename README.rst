@@ -23,6 +23,22 @@ basic TFTP RFC1350 compliance mode, disabling all TFTP extensions for
 increased compatibility would you encouter any problem with your target
 system.
 
+Usage as a Library
+------------------
+
+pTFTPd TFTP client can also be imported and used within a Python script.
+
+```from ptftpd import tftpclient
+
+client = tftpclient.client('tftpsite.com')
+results = client.get(['-f', 'thefile.txt'])
+
+print(results[0] +  'kB')
+# prints 55234 kB
+
+print(results[1] + ' kB/s')
+# prints 100 kB/s```
+
 Installation
 ------------
 
