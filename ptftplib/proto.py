@@ -25,10 +25,13 @@ from . import notify
 l = notify.getLogger('tftp-proto')
 notify.NullEngine.install(l)
 
+_LOG_PROTO = False
+
 # Uncomment these lines to enable full protocol dump.
 # import sys
 # import logging
 #
+# _LOG_PROTO = True
 # notify.StreamEngine.install(l, sys.stderr, logging.DEBUG)
 
 # The following values are defined in the following RFC documents:
@@ -148,8 +151,9 @@ class TFTPHelper(object):
           The request packet as a string.
         """
 
-        l.debug("  >   %s: %s (mode: %s, opts: %s)" %
-                (TFTP_OPS[OP_RRQ], filename, mode, opts))
+        if _LOG_PROTO:
+            l.debug('  >   %s: %s (mode: %s, opts: %s)',
+                    TFTP_OPS[OP_RRQ], filename, mode, opts)
 
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
                              OP_RRQ,
@@ -175,8 +179,9 @@ class TFTPHelper(object):
           The request packet as a string.
         """
 
-        l.debug("  >   %s: %s (mode: %s, opts: %s)" %
-                (TFTP_OPS[OP_WRQ], filename, mode, opts))
+        if _LOG_PROTO:
+            l.debug('  >   %s: %s (mode: %s, opts: %s)',
+                    TFTP_OPS[OP_WRQ], filename, mode, opts)
 
         packet = struct.pack('!H%dsc%dsc' % (len(filename), len(mode)),
                              OP_WRQ,
@@ -200,10 +205,11 @@ class TFTPHelper(object):
           The ack packet as a string.
         """
 
-        if num > 0:
-            l.debug("  >   %s: #%d" % (TFTP_OPS[OP_ACK], num))
-        elif num == 0:
-            l.debug("  >   %s: Acknowledging transfer." % TFTP_OPS[OP_ACK])
+        if _LOG_PROTO:
+            if num > 0:
+                l.debug('  >   %s: #%d', TFTP_OPS[OP_ACK], num)
+            elif num == 0:
+                l.debug('  >   %s: Acknowledging transfer.', TFTP_OPS[OP_ACK])
 
         return struct.pack('!HH', OP_ACK, num)
 
@@ -224,7 +230,8 @@ class TFTPHelper(object):
         if errno == ERROR_UNDEF and errmsg:
             error = errmsg
 
-        l.debug("  > %s: %d %s" % (TFTP_OPS[OP_ERROR], errno, error))
+        if _LOG_PROTO:
+            l.debug('  > %s: %d %s', TFTP_OPS[OP_ERROR], errno, error)
         return struct.pack('!HH%dsc' % len(error),
                            OP_ERROR, errno,
                            error.encode('ascii'), b'\0')
@@ -240,9 +247,10 @@ class TFTPHelper(object):
           The data packet as a string.
         """
 
-        data_len = len(data)
-        l.debug("  >  %s: #%d (%d bytes)" % (TFTP_OPS[OP_DATA], num, data_len))
-        return struct.pack('!HH%ds' % data_len, OP_DATA, num, data)
+        if _LOG_PROTO:
+            l.debug('  >  %s: #%d (%d bytes)', TFTP_OPS[OP_DATA], num,
+                    len(data))
+        return struct.pack('!HH%ds' % len(data), OP_DATA, num, data)
 
     def createOACK(opts):
         """
@@ -254,11 +262,12 @@ class TFTPHelper(object):
           The OACK packet as a string.
         """
 
-        l.debug("  >  %s: %s" % (TFTP_OPS[OP_OACK], opts))
+        if _LOG_PROTO:
+            l.debug('  >  %s: %s', TFTP_OPS[OP_OACK], opts)
 
-        opts_str = ""
+        opts_str = ''
         for opt, val in opts.items():
-            opts_str += "%s%c%s%c" % (opt, '\0', val, '\0')
+            opts_str += '%s%c%s%c' % (opt, '\0', val, '\0')
 
         return struct.pack('!H%ds' % len(opts_str),
                            OP_OACK, opts_str.encode('ascii'))
@@ -298,8 +307,9 @@ class TFTPHelper(object):
             if opt in TFTP_OPTIONS:
                 opts[opt] = val
 
-        l.debug("  <   %s: %s (mode: %s, opts: %s)" %
-                (TFTP_OPS[OP_RRQ], filename, mode, opts))
+        if _LOG_PROTO:
+            l.debug('  <   %s: %s (mode: %s, opts: %s)',
+                    TFTP_OPS[OP_RRQ], filename, mode, opts)
         return filename, mode, opts
 
     def parseWRQ(request):
@@ -337,8 +347,9 @@ class TFTPHelper(object):
             if opt in TFTP_OPTIONS:
                 opts[opt] = val
 
-        l.debug("  <   %s: %s (mode: %s, opts: %s)" %
-                (TFTP_OPS[OP_WRQ], filename, mode, opts))
+        if _LOG_PROTO:
+            l.debug('  <   %s: %s (mode: %s, opts: %s)',
+                    TFTP_OPS[OP_WRQ], filename, mode, opts)
         return filename, mode, opts
 
     def parseACK(request):
@@ -355,16 +366,18 @@ class TFTPHelper(object):
 
         try:
             packet = struct.unpack('!H', request)
-            num = packet[0]
-
-            if num > 0:
-                l.debug("  <   %s: #%d" % (TFTP_OPS[OP_ACK], num))
-            elif num == 0:
-                l.debug("  <   %s: Transfer acknowledged." % TFTP_OPS[OP_ACK])
-
-            return num
         except struct.error:
             raise SyntaxError('invalid acknowledgment packet')
+
+        num = packet[0]
+
+        if _LOG_PROTO:
+            if num > 0:
+                l.debug('  <   %s: #%d', TFTP_OPS[OP_ACK], num)
+            elif num == 0:
+                l.debug('  <   %s: Transfer acknowledged.', TFTP_OPS[OP_ACK])
+
+        return num
 
     def parseDATA(request):
         """
@@ -381,14 +394,16 @@ class TFTPHelper(object):
 
         try:
             packet = struct.unpack('!H', request[:2])
-            num = packet[0]
-            data = request[2:]
-
-            l.debug("  <  %s: #%d (%d bytes)" %
-                    (TFTP_OPS[OP_DATA], num, len(data)))
-            return num, data
         except struct.error:
             raise SyntaxError('invalid data packet')
+
+        num = packet[0]
+        data = request[2:]
+
+        if _LOG_PROTO:
+            l.debug('  <  %s: #%d (%d bytes)',
+                    TFTP_OPS[OP_DATA], num, len(data))
+        return num, data
 
     def parseERROR(request):
         """
@@ -407,11 +422,12 @@ class TFTPHelper(object):
             packet = struct.unpack('!H', request[:2])
             errno = packet[0]
             errmsg = request[2:].split(b'\0')[0].decode('ascii')
-
-            l.debug("  < %s: %s" % (TFTP_OPS[OP_ERROR], errmsg))
-            return errno, errmsg
         except (struct.error, IndexError):
             raise SyntaxError('invalid error packet')
+
+        if _LOG_PROTO:
+            l.debug('  < %s: %s', TFTP_OPS[OP_ERROR], errmsg)
+        return errno, errmsg
 
     def parseOACK(request):
         """
@@ -436,7 +452,8 @@ class TFTPHelper(object):
             val = packet[i+1].decode('ascii')
             opts[opt] = val
 
-        l.debug("  <  %s: %s" % (TFTP_OPS[OP_OACK], opts))
+        if _LOG_PROTO:
+            l.debug('  <  %s: %s', TFTP_OPS[OP_OACK], opts)
 
         return opts
 
