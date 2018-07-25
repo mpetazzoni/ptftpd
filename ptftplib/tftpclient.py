@@ -710,15 +710,8 @@ def usage():
     print('                         This will discard other TFTP option values.')
     print()
 
-def client(hostname):
-    host = _PTFTP_DEFAULT_HOST
-    port = _PTFTP_DEFAULT_PORT
-    mode = _PTFTP_DEFAULT_MODE
-    exts = {}
-    rfc1350 = False
-
-    host = hostname
-
+def client(host=_PTFTP_DEFAULT_HOST, port=_PTFTP_DEFAULT_PORT, 
+           mode=_PTFTP_DEFAULT_MODE, exts={}, rfc1350=False):
     client = TFTPClient((host, port), exts, mode, rfc1350)
     client.connect()
     return client
