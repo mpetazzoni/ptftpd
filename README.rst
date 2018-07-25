@@ -30,7 +30,7 @@ pTFTPd TFTP client can also be imported and used within a Python script.
 
 ```from ptftpd import tftpclient
 
-client = tftpclient.client('tftpsite.com')
+client = tftpclient.client(host='tftpsite.com', exts={'windowsize': 4})
 results = client.get(['-f', 'thefile.txt'])
 
 print(results[0] +  'kB')
