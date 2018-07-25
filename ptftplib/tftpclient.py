@@ -571,7 +571,8 @@ class TFTPClient(object):
                                        transfer_time)))
         self.PTFTP_STATE.file.close()
         os.remove(self.PTFTP_STATE.file.name)
-        return True
+        return (self.PTFTP_STATE.filesize, 
+                self.__get_speed(self.PTFTP_STATE.filesize, transfer_time))
 
     def put(self, args):
         """
@@ -709,6 +710,11 @@ def usage():
     print('                         This will discard other TFTP option values.')
     print()
 
+def client(host=_PTFTP_DEFAULT_HOST, port=_PTFTP_DEFAULT_PORT, 
+           mode=_PTFTP_DEFAULT_MODE, exts={}, rfc1350=False):
+    client = TFTPClient((host, port), exts, mode, rfc1350)
+    client.connect()
+    return client
 
 def main():
     # TODO: convert to optparse
