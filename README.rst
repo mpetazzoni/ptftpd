@@ -28,19 +28,20 @@ Usage as a Library
 
 pTFTPd TFTP client can also be imported and used within a Python script.
 
-```from ptftpd import tftpclient
+.. code:: python
+    from ptftpd import tftpclient
 
-client = tftpclient.client(host='tftpsite.com', exts={'windowsize': 4})
+    client = tftpclient.client(host='tftpsite.com', exts={'windowsize': 4})
 
-results = client.get(['-f', 'thefile.txt'])
-### or
-results = client.put(['thefile.txt'])
+    results = client.get(['-f', 'thefile.txt'])
+    ### or
+    results = client.put(['thefile.txt'])
 
-print(results[0] +  'kB')
-# prints 55234 kB
+    print(results[0] +  'kB')
+    # prints 55234 kB
 
-print(results[1] + ' kB/s')
-# prints 100 kB/s```
+    print(results[1] + ' kB/s')
+    # prints 100 kB/s
 
 Installation
 ------------
