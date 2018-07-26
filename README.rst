@@ -38,7 +38,7 @@ pTFTPd TFTP client can also be imported and used within a Python script.
     ### or
     results = client.put(['thefile.txt'])
 
-    print(results[0] +  'kB')
+    print(results[0] + ' kB')
     # prints 55234 kB
 
     print(results[1] + ' kB/s')
