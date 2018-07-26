@@ -29,6 +29,7 @@ Usage as a Library
 pTFTPd TFTP client can also be imported and used within a Python script.
 
 .. code:: python
+
     from ptftpd import tftpclient
 
     client = tftpclient.client(host='tftpsite.com', exts={'windowsize': 4})
