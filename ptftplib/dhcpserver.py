@@ -62,9 +62,8 @@ DHCP_OPTION_REQUESTED_IP = 50         # Requested IP address
 DHCP_OPTION_LEASE_TIME = 51           # Lease time for the IP address
 DHCP_OPTION_OP = 53                   # The DHCP operation (see above)
 DHCP_OPTION_SERVER_ID = 54            # Server Identifier (IP address)
-DHCP_OPTION_PXE_REQ = 55              # The most basic PXE option. We
-                                      # only use this to identify PXE
-                                      # requests.
+DHCP_OPTION_VENDOR_CLASS_ID = 60      # The vendor class identifier, used
+                                      # to identify PXE clients
 DHCP_OPTION_CLIENT_UUID = 61          # The client machine UUID
 DHCP_OPTION_PXE_VENDOR = 43           # PXE vendor extensions
 DHCP_OPTION_CLIENT_UUID2 = 97         # The client machine UUID
@@ -215,7 +214,7 @@ class DhcpPacket(object):
                   len(value[1:]) == DHCP_CLIENT_UUID_LENGTH):
                 # First byte of the UUID is \0
                 self.uuid = _unpack_uuid(value[1:])
-            elif option == DHCP_OPTION_PXE_REQ:
+            elif option == DHCP_OPTION_VENDOR_CLASS_ID and value.startswith('PXEClient'):
                 self.is_pxe_request = True
             elif option == DHCP_OPTION_REQUESTED_IP:
                 self.requested_ip = _unpack_ip(value)
