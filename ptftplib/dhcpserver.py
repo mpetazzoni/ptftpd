@@ -225,12 +225,14 @@ class DhcpPacket(object):
 
 
 class DHCPServer(object):
-    def __init__(self, interface, bootfile, router=None, tftp_server=None):
+    def __init__(self, interface, bootfile, router=None, tftp_server=None,
+                 answer_all_requests=False):
         self.interface = interface
         self.ip, self.netmask, self.mac = get_ip_config_for_iface(interface)
         self.bootfile = bootfile
         self.router = router or self.ip
         self.tftp_server = tftp_server or self.ip
+        self.answer_all_requests = answer_all_requests
         self.ips_allocated = {}
 
         self.sock = socket.socket(socket.PF_PACKET, socket.SOCK_RAW)
@@ -247,7 +249,7 @@ class DHCPServer(object):
                 continue
 
     def handle_dhcp_request(self, pkt):
-        if not pkt.is_pxe_request:
+        if not pkt.is_pxe_request and not self.answer_all_requests:
             l.info('Ignoring non-PXE DHCP request')
             return
 
@@ -381,6 +383,9 @@ def main():
     parser.add_option("-g", "--gateway", dest="router",
                       help="The IP address of the default gateway, if not "
                       "this machine", default=None)
+    parser.add_option("-a", "--answer-all-dhcp-requests", dest="answer_all_requests",
+                      help="Enables DHCP response to all clients, "
+                           "default is PXE clients only", action="store_true", default=False)
     parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
                       const=logging.INFO, help="Output information messages",
                       default=logging.WARNING)
@@ -400,7 +405,8 @@ def main():
 
     try:
         server = DHCPServer(iface, bootfile, router=options.router,
-                            tftp_server=options.tftp_server)
+                            tftp_server=options.tftp_server,
+                            answer_all_requests=options.answer_all_requests)
         server.serve_forever()
     except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
