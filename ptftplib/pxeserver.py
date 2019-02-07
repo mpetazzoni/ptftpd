@@ -42,11 +42,12 @@ l = notify.getLogger('pxed')
 
 
 class DHCPThread(threading.Thread):
-    def __init__(self, iface, bootfile, router, answer_all_requests):
+    def __init__(self, iface, bootfile, router, answer_all_requests, name_servers):
         threading.Thread.__init__(self)
         self.setDaemon(True)
         self.server = dhcpserver.DHCPServer(iface, bootfile, router=router,
-                                            answer_all_requests=answer_all_requests)
+                                            answer_all_requests=answer_all_requests,
+                                            name_servers=name_servers)
 
     def run(self):
         self.server.serve_forever()
@@ -67,6 +68,9 @@ def main():
     parser.add_option("-a", "--answer-all-dhcp-requests", dest="answer_all_requests",
                       help="Enables DHCP response to all clients, "
                            "default is PXE clients only", action="store_true", default=False)
+    parser.add_option("-n", "--name-servers", dest="name_servers", action='append', metavar='NAME_SERVER',
+                      help="Domain Name Servers (DNS) IPs to provide to DHCP client. "
+                           "Use multiple flags to specify up to 3 DNS servers", default=None)
     parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
                       const=logging.INFO, help="Output information messages",
                       default=logging.WARNING)
@@ -75,6 +79,11 @@ def main():
 
     (options, args) = parser.parse_args()
     if len(args) != 3:
+        parser.print_help()
+        return 1
+
+    if options.name_servers and len(options.name_servers) > 3:
+        print('Error: up to 3 DNS servers allowed\n')
         parser.print_help()
         return 1
 
@@ -92,7 +101,8 @@ def main():
                                 fmt='%(levelname)s(%(name)s): %(message)s')
 
     try:
-        dhcp = DHCPThread(iface, bootfile, options.router, options.answer_all_requests)
+        dhcp = DHCPThread(iface, bootfile, options.router, options.answer_all_requests,
+                          options.name_servers)
         tftp = tftpserver.TFTPServer(iface, root,
                                      strict_rfc1350=options.strict_rfc1350)
     except tftpserver.TFTPServerConfigurationError as e:
