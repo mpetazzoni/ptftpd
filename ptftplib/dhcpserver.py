@@ -395,7 +395,7 @@ def main():
     parser.add_option("-a", "--answer-all-dhcp-requests", dest="answer_all_requests",
                       help="Enables DHCP response to all clients, "
                            "default is PXE clients only", action="store_true", default=False)
-    parser.add_option("-n", "--name-servers", dest="name_servers", action='append',
+    parser.add_option("-n", "--name-servers", dest="name_servers", action='append', metavar='NAME_SERVER',
                       help="Domain Name Servers (DNS) IPs to provide to DHCP client. "
                            "Use multiple flags to specify up to 3 DNS servers", default=None)
     parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
