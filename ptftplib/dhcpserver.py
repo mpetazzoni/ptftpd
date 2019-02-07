@@ -318,7 +318,7 @@ class DHCPServer(object):
 
         if self.name_servers:
             dns_servers = ''
-            for name_server in self.name_servers.split(','):
+            for name_server in self.name_servers:
                 dns_servers += _pack_ip(name_server)
             dhcp_options.append((DHCP_OPTION_DNS, dns_servers))
 
@@ -395,9 +395,9 @@ def main():
     parser.add_option("-a", "--answer-all-dhcp-requests", dest="answer_all_requests",
                       help="Enables DHCP response to all clients, "
                            "default is PXE clients only", action="store_true", default=False)
-    parser.add_option("-n", "--name-servers", dest="name_servers",
-                      help="Domain Name Servers (DNS) to provide to DHCP client,"
-                           "',' separated IPs", default=None)
+    parser.add_option("-n", "--name-servers", dest="name_servers", action='append',
+                      help="Domain Name Servers (DNS) IPs to provide to DHCP client. "
+                           "Use multiple flags to specify up to 3 DNS servers", default=None)
     parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
                       const=logging.INFO, help="Output information messages",
                       default=logging.WARNING)
@@ -405,6 +405,11 @@ def main():
     (options, args) = parser.parse_args()
 
     if len(args) != 2:
+        parser.print_help()
+        return 1
+
+    if options.name_servers and len(options.name_servers) > 3:
+        print('Error: up to 3 DNS servers allowed\n')
         parser.print_help()
         return 1
 
