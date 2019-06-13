@@ -70,9 +70,11 @@ def get_ip_config_for_iface(iface):
 
 def get_max_udp_datagram_size():
     """Retrieve the maximum UDP datagram size allowed by the system."""
-    val = subprocess.check_output(['sysctl', '-n', 'net.inet.udp.maxdgram'])
-    return int(val)
-
+    try:
+        val = subprocess.check_output(['sysctl', '-n', 'net.inet.udp.maxdgram'])
+        return int(val)
+    except subprocess.CalledProcessError:
+        return 508
 
 class TFTPServerConfigurationError(Exception):
     """The configuration of the pTFTPd is incorrect."""
