@@ -100,7 +100,7 @@ def get_ip_config_for_iface(iface):
 
     import fcntl
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    ifname = struct.pack('256s', iface[:15])
+    ifname = struct.pack('256s', iface[:15].encode())
     ip = fcntl.ioctl(s.fileno(), SIOCGIFADDR, ifname)
     mask = fcntl.ioctl(s.fileno(), SIOCGIFNETMASK, ifname)
     mac = fcntl.ioctl(s.fileno(), SIOCGIFHWADDR, ifname)
