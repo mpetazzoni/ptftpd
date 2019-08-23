@@ -42,12 +42,12 @@ l = notify.getLogger('pxed')
 
 
 class DHCPThread(threading.Thread):
-    def __init__(self, iface, bootfile, router, answer_all_requests, name_servers):
+    def __init__(self, iface, bootfile, router, answer_all_requests, name_servers, scope):
         threading.Thread.__init__(self)
         self.setDaemon(True)
         self.server = dhcpserver.DHCPServer(iface, bootfile, router=router,
                                             answer_all_requests=answer_all_requests,
-                                            name_servers=name_servers)
+                                            name_servers=name_servers, scope=scope)
 
     def run(self):
         self.server.serve_forever()
@@ -71,6 +71,8 @@ def main():
     parser.add_option("-n", "--name-servers", dest="name_servers", action='append', metavar='NAME_SERVER',
                       help="Domain Name Servers (DNS) IPs to provide to DHCP client. "
                            "Use multiple flags to specify up to 3 DNS servers", default=None)
+    parser.add_option("-s", "--scope", dest="scope",
+                      help="DHCP scope, '-' separated IPs", default=None)
     parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
                       const=logging.INFO, help="Output information messages",
                       default=logging.WARNING)
@@ -85,6 +87,10 @@ def main():
     if options.name_servers and len(options.name_servers) > 3:
         print('Error: up to 3 DNS servers allowed\n')
         parser.print_help()
+        return 1
+
+    if options.scope and len(options.scope.split('-')) != 2:
+        print('Error: DHCP scope must be two dash separated IPs')
         return 1
 
     iface, root, bootfile = args
@@ -102,7 +108,7 @@ def main():
 
     try:
         dhcp = DHCPThread(iface, bootfile, options.router, options.answer_all_requests,
-                          options.name_servers)
+                          options.name_servers, options.scope)
         tftp = tftpserver.TFTPServer(iface, root,
                                      strict_rfc1350=options.strict_rfc1350)
     except tftpserver.TFTPServerConfigurationError as e:
