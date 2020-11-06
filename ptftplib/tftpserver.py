@@ -274,7 +274,7 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
             if e.errno == errno.ENOENT:
                 try:
                     peer_state.file = open(peer_state.filepath, 'wb')
-                    peer_state.packetnum = 0
+                    peer_state.packetnum = 1
                     peer_state.state = state.STATE_RECV_ACK
                     l.info('Upload of %s began.', filename,
                            extra=peer_state.extra(notify.TRANSFER_STARTED))
@@ -296,7 +296,6 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
                 # HOOK: this is where we should check that we accept
                 # the options requested by the client.
 
-                peer_state.packetnum = 1
                 peer_state.state = state.STATE_SEND_OACK
                 peer_state.set_opts(opts)
             else:
@@ -416,6 +415,8 @@ class TFTPServerHandler(socketserver.DatagramRequestHandler):
 
         if peer_state.state == state.STATE_RECV:
             if num != peer_state.packetnum:
+                l.error('Unexpected packet number! Got #%d; wanted #%d',
+                        num, peer_state.packetnum)
                 peer_state.state = state.STATE_ERROR
                 peer_state.error = proto.ERROR_ILLEGAL_OP
             else:
