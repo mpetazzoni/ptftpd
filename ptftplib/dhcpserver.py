@@ -172,7 +172,13 @@ class DhcpPacket(object):
         # Strip off the ethernet frame and check the IP packet type. It should
         # be UDP (0x11)
         pkt = pkt[14:]
-        if ord(pkt[9]) != IP_UDP_PROTO:
+        # add adaptor for python3 and python2 
+        # for python2 the type of pkt[N] is str, while for python3 it is int
+        if type(pkt[9]) is str:
+            protocol = ord(pkt[9])
+        else:
+            protocol = pkt[9]
+        if protocol != IP_UDP_PROTO:
             raise NotDhcpPacketError()
 
         # Strip off the IP header and check the source/destination ports in the
