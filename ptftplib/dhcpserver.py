@@ -171,6 +171,8 @@ class DhcpPacket(object):
 
         # Strip off the ethernet frame and check the IP packet type. It should
         # be UDP (0x11)
+        if type(pkt) is bytes:
+            pkt = pkt.decode(errors='ignore')
         pkt = pkt[14:]
         if ord(pkt[9]) != IP_UDP_PROTO:
             raise NotDhcpPacketError()
