@@ -171,6 +171,7 @@ class DhcpPacket(object):
 
         # Strip off the ethernet frame and check the IP packet type. It should
         # be UDP (0x11)
+        # for python3 it's bytes, need to decode to str first
         if type(pkt) is bytes:
             pkt = pkt.decode(errors='ignore')
         pkt = pkt[14:]
