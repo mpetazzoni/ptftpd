@@ -111,7 +111,7 @@ def _dhcp_options(options):
     """Generate a sequence of DHCP options from a raw byte stream."""
     i = 0
     while i < len(options):
-        code = ord(options[i])
+        code = _ord(options[i])
 
         # Handle pad and end options.
         if code == 0:
@@ -121,7 +121,7 @@ def _dhcp_options(options):
             return
 
         # Extract and yield the option number and option value.
-        data_len = ord(options[i+1])
+        data_len = _ord(options[i+1])
         data = options[i + 2:i + 2 + data_len]
         i += 2 + data_len
         yield (code, data)
@@ -161,6 +161,11 @@ class NotDhcpPacketError(Exception):
 class UninterestingDhcpPacket(Exception):
     """Packet is DHCP, but not of interest to us."""
 
+def _ord(e):
+        if type(e) == int:
+                return e
+        else:
+                return ord(e)
 
 class DhcpPacket(object):
     def __init__(self, pkt):
@@ -172,16 +177,14 @@ class DhcpPacket(object):
         # Strip off the ethernet frame and check the IP packet type. It should
         # be UDP (0x11)
         # for python3 it's bytes, need to decode to str first
-        if type(pkt) is bytes:
-            pkt = pkt.decode(errors='ignore')
         pkt = pkt[14:]
-        if ord(pkt[9]) != IP_UDP_PROTO:
+        if _ord(pkt[9]) != IP_UDP_PROTO:
             raise NotDhcpPacketError()
 
         # Strip off the IP header and check the source/destination ports in the
         # UDP datagram. The packet should be from port 68 to port 67 to
         # tentatively be DHCP.
-        header_len = (ord(pkt[0]) & 0xF) * 4
+        header_len = (_ord(pkt[0]) & 0xF) * 4
         pkt = pkt[header_len:]
         (src, dst) = struct.unpack('!2H', pkt[:4])
         if not (src == 68 and dst == 67):
@@ -209,7 +212,7 @@ class DhcpPacket(object):
 
         for option, value in _dhcp_options(options):
             if option == DHCP_OPTION_OP:
-                self.op = ord(value)
+                self.op = _ord(value)
                 # We only care about interesting "incoming" DHCP ops.
                 if self.op not in (DHCP_OP_DHCPDISCOVER, DHCP_OP_DHCPREQUEST):
                     raise UninterestingDhcpPacket()
