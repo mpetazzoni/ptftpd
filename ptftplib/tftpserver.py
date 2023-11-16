@@ -56,6 +56,10 @@ _PTFTPD_SERVER_NAME = 'pFTPd'
 _PTFTPD_DEFAULT_PORT = 69
 _PTFTPD_DEFAULT_PATH = '/tftpboot'
 
+# When we can't figure out the UDP datagram size with sysctl,
+# this is a reasonable default we can use to keep things going.
+_DEFAULT_UDP_DATAGRAM_SIZE = 508
+
 
 def get_ip_config_for_iface(iface):
     """Retrieve and return the IP address/netmask of the given interface."""
@@ -70,9 +74,11 @@ def get_ip_config_for_iface(iface):
 
 def get_max_udp_datagram_size():
     """Retrieve the maximum UDP datagram size allowed by the system."""
-    val = subprocess.check_output(['sysctl', '-n', 'net.inet.udp.maxdgram'])
-    return int(val)
-
+    try:
+        val = subprocess.check_output(['sysctl', '-n', 'net.inet.udp.maxdgram'])
+        return int(val)
+    except subprocess.CalledProcessError:
+        return _DEFAULT_UDP_DATAGRAM_SIZE
 
 class TFTPServerConfigurationError(Exception):
     """The configuration of the pTFTPd is incorrect."""
