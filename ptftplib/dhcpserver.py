@@ -107,6 +107,12 @@ def get_ip_config_for_iface(iface):
     return ip_from_response(ip), ip_from_response(mask), mac_from_response(mac)
 
 
+def get_ips_in_range(start, end):
+    start = struct.unpack('>I', socket.inet_aton(start))[0]
+    end = struct.unpack('>I', socket.inet_aton(end))[0]
+    return [socket.inet_ntoa(struct.pack('>I', i)) for i in range(start, end)]
+
+
 def _dhcp_options(options):
     """Generate a sequence of DHCP options from a raw byte stream."""
     i = 0
@@ -227,7 +233,7 @@ class DhcpPacket(object):
 
 class DHCPServer(object):
     def __init__(self, interface, bootfile, router=None, tftp_server=None,
-                 answer_all_requests=False, name_servers=None):
+                 answer_all_requests=False, name_servers=None, scope=None):
         self.interface = interface
         self.ip, self.netmask, self.mac = get_ip_config_for_iface(interface)
         self.name_servers = name_servers
@@ -239,6 +245,10 @@ class DHCPServer(object):
 
         self.sock = socket.socket(socket.PF_PACKET, socket.SOCK_RAW)
         self.sock.bind((self.interface, ETHERNET_IP_PROTO))
+
+        if scope:
+            l.info('DHCP scope = ' + scope)
+            self.start, self.end = scope.split('-')
 
     def serve_forever(self):
         l.info('Serving PXE DHCP requests on %s' % self.interface)
@@ -357,28 +367,36 @@ class DHCPServer(object):
         return reply
 
     def generate_free_ip(self):
-        server_ip = struct.unpack('!L', _pack_ip(self.ip))[0]
-        netmask = struct.unpack('!L', _pack_ip(self.netmask))[0]
-        anti_netmask = 0xFFFFFFFF - netmask
+        # if DHCP scope set
+        if hasattr(self, 'start') and hasattr(self, 'end'):
+            possible_ips = get_ips_in_range(self.start, self.end)
+            for ip in self.ips_allocated:
+                if ip in possible_ips:
+                    possible_ips.remove(ip)
+            return random.choice(possible_ips)
+        else:
+            server_ip = struct.unpack('!L', _pack_ip(self.ip))[0]
+            netmask = struct.unpack('!L', _pack_ip(self.netmask))[0]
+            anti_netmask = 0xFFFFFFFF - netmask
 
-        while True:
-            entropy = random.getrandbits(32)
+            while True:
+                entropy = random.getrandbits(32)
 
-            client_ip = (server_ip & netmask) | (entropy & anti_netmask)
+                client_ip = (server_ip & netmask) | (entropy & anti_netmask)
 
-            # Exclude using the server's address, the network's
-            # address, the broadcast address, and any IP already in
-            # use.
-            if (client_ip == server_ip or
-                    (client_ip & netmask) == 0 or
-                    (client_ip | netmask) == 0xFFFFFFFF):
-                continue
+                # Exclude using the server's address, the network's
+                # address, the broadcast address, and any IP already in
+                # use.
+                if (client_ip == server_ip or
+                        (client_ip & netmask) == 0 or
+                        (client_ip | netmask) == 0xFFFFFFFF):
+                    continue
 
-            ip = _unpack_ip(struct.pack('!L', client_ip))
-            if ip in self.ips_allocated:
-                continue
+                ip = _unpack_ip(struct.pack('!L', client_ip))
+                if ip in self.ips_allocated:
+                    continue
 
-            return ip
+                return ip
 
 
 def main():
@@ -398,6 +416,8 @@ def main():
     parser.add_option("-n", "--name-servers", dest="name_servers", action='append', metavar='NAME_SERVER',
                       help="Domain Name Servers (DNS) IPs to provide to DHCP client. "
                            "Use multiple flags to specify up to 3 DNS servers", default=None)
+    parser.add_option("-s", "--scope", dest="scope",
+                      help="DHCP scope, '-' separated IPs", default=None)
     parser.add_option("-v", "--verbose", dest="loglevel", action="store_const",
                       const=logging.INFO, help="Output information messages",
                       default=logging.WARNING)
@@ -413,6 +433,10 @@ def main():
         parser.print_help()
         return 1
 
+    if options.scope and len(options.scope.split('-')) != 2:
+        print('Error: DHCP scope must be two dash separated IPs')
+        return 1
+
     iface, bootfile = args
 
     # Setup notification logging
@@ -423,7 +447,8 @@ def main():
     try:
         server = DHCPServer(iface, bootfile, router=options.router,
                             tftp_server=options.tftp_server,
-                            answer_all_requests=options.answer_all_requests)
+                            answer_all_requests=options.answer_all_requests,
+                            scope=options.scope)
         server.serve_forever()
     except socket.error as e:
         sys.stderr.write('Socket error (%s): %s!\n' %
@@ -431,6 +456,7 @@ def main():
         return 1
 
     return 0
+
 
 if __name__ == '__main__':
     try:
